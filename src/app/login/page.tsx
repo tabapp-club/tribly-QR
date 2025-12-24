@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { login, getStoredUser, setStoredUser } from "@/lib/auth";
+import { generateBusinessSlug } from "@/lib/business-slug";
+import { getBusinessById } from "@/lib/mock-data";
 import { LogIn, Mail, Lock, AlertCircle } from "lucide-react";
 
 export default function LoginPage() {
@@ -21,7 +23,13 @@ export default function LoginPage() {
     const user = getStoredUser();
     if (user) {
       // Redirect based on user role
-      if (user.role === "sales-team") {
+      if (user.role === "business" && user.businessId) {
+        const business = getBusinessById(user.businessId);
+        if (business) {
+          const slug = generateBusinessSlug(business);
+          router.push(`/dashboard/business/${slug}`);
+        }
+      } else if (user.role === "sales-team") {
         router.push("/sales-dashboard");
       } else {
         router.push("/dashboard");
@@ -41,7 +49,15 @@ export default function LoginPage() {
       if (result.success && result.user) {
         setStoredUser(result.user);
         // Redirect based on user role
-        if (result.user.role === "sales-team") {
+        if (result.user.role === "business" && result.user.businessId) {
+          const business = getBusinessById(result.user.businessId);
+          if (business) {
+            const slug = generateBusinessSlug(business);
+            router.push(`/dashboard/business/${slug}`);
+          } else {
+            setError("Business not found");
+          }
+        } else if (result.user.role === "sales-team") {
           router.push("/sales-dashboard");
         } else {
           router.push("/dashboard");
@@ -132,10 +148,12 @@ export default function LoginPage() {
               )}
             </Button>
 
-            <div className="text-center text-xs text-muted-foreground pt-2">
-              <p>Demo Credentials:</p>
-              <p className="font-mono mt-1">Email: admin@tribly.com</p>
-              <p className="font-mono">Password: admin123</p>
+            <div className="text-center text-xs text-muted-foreground pt-2 space-y-1">
+              <p className="font-semibold">Demo Credentials:</p>
+              <div className="space-y-1">
+                <p className="font-mono">Admin: admin@tribly.com / admin123</p>
+                <p className="font-mono">Business: contact@coffeehouse.com / coffee123</p>
+              </div>
             </div>
           </form>
         </CardContent>

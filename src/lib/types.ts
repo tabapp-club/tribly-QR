@@ -14,7 +14,7 @@ export type BusinessCategory =
 
 export type FeedbackTone = "professional" | "friendly" | "casual" | "formal";
 
-export type UserRole = "admin" | "sales-team";
+export type UserRole = "admin" | "sales-team" | "business";
 
 export type ReviewCategory = "product" | "staff" | "customer-experience" | "offers-discounts";
 
@@ -28,6 +28,7 @@ export interface Business {
   address?: string;
   city?: string;
   area?: string;
+  overview?: string; // Business overview/description
   createdAt: string;
   updatedAt: string;
   // QR Code
@@ -42,6 +43,7 @@ export interface Business {
   // Payment
   paymentPlan?: "qr-basic" | "qr-plus";
   paymentStatus?: "active" | "past-due" | "cancelled";
+  paymentExpiryDate?: string; // ISO date string for plan expiry
   // Sales Team
   salesTeamId?: string; // ID of the sales team member who onboarded this business
   // SEO
@@ -61,6 +63,7 @@ export interface Review {
   category?: ReviewCategory; // Category of the review feedback
   customerName?: string;
   customerEmail?: string;
+  customerPhone?: string;
   status: "pending" | "responded" | "archived";
   autoReplySent: boolean;
   createdAt: string;

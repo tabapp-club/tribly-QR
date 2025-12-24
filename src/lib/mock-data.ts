@@ -148,6 +148,7 @@ export const mockReviews: Review[] = [
     category: "staff",
     customerName: "Rajesh Kumar",
     customerEmail: "rajesh.kumar@email.com",
+    customerPhone: "+91 98765 43220",
     status: "pending",
     autoReplySent: false,
     createdAt: "2024-03-15T14:30:00Z",
@@ -160,6 +161,7 @@ export const mockReviews: Review[] = [
     category: "product",
     customerName: "Priya Sharma",
     customerEmail: "priya.sharma@email.com",
+    customerPhone: "+91 98765 43221",
     status: "responded",
     autoReplySent: true,
     createdAt: "2024-03-12T10:15:00Z",
@@ -172,6 +174,7 @@ export const mockReviews: Review[] = [
     category: "product",
     customerName: "Amit Patel",
     customerEmail: "amit.patel@email.com",
+    customerPhone: "+91 98765 43222",
     status: "pending",
     autoReplySent: false,
     createdAt: "2024-03-18T16:45:00Z",
@@ -184,6 +187,7 @@ export const mockReviews: Review[] = [
     category: "staff",
     customerName: "Sneha Reddy",
     customerEmail: "sneha.reddy@email.com",
+    customerPhone: "+91 98765 43223",
     status: "pending",
     autoReplySent: false,
     createdAt: "2024-03-20T11:20:00Z",
@@ -196,6 +200,7 @@ export const mockReviews: Review[] = [
     category: "customer-experience",
     customerName: "Vikram Singh",
     customerEmail: "vikram.singh@email.com",
+    customerPhone: "+91 98765 43224",
     status: "responded",
     autoReplySent: true,
     createdAt: "2024-03-19T19:30:00Z",
@@ -208,6 +213,7 @@ export const mockReviews: Review[] = [
     category: "customer-experience",
     customerName: "Anjali Mehta",
     customerEmail: "anjali.mehta@email.com",
+    customerPhone: "+91 98765 43225",
     status: "pending",
     autoReplySent: false,
     createdAt: "2024-03-21T09:00:00Z",
@@ -238,5 +244,20 @@ export const addBusiness = (business: Omit<Business, "id" | "createdAt" | "updat
 // Function to get businesses for a sales team member
 export const getBusinessesBySalesTeamId = (salesTeamId: string): Business[] => {
   return mockBusinesses.filter((b) => b.salesTeamId === salesTeamId);
+};
+
+// Business credentials mapping (email -> password)
+// In production, this would be stored securely in a database
+export const BUSINESS_CREDENTIALS: Record<string, string> = {
+  "contact@coffeehouse.com": "coffee123",
+  "info@fitzone.com": "fitzone123",
+  "hello@beautysalon.com": "beauty123",
+  "contact@techsolutions.com": "tech123",
+  "info@greenleaf.com": "greenleaf123",
+};
+
+// Get business by email
+export const getBusinessByEmail = (email: string): Business | undefined => {
+  return mockBusinesses.find((b) => b.email.toLowerCase() === email.toLowerCase());
 };
 

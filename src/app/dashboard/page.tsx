@@ -6,12 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { mockBusinesses, getSummaryStats, addBusiness } from "@/lib/mock-data";
+import { mockBusinesses } from "@/lib/mock-data";
 import { Business, BusinessStatus, BusinessCategory } from "@/lib/types";
 import { logout, setStoredUser, getStoredUser, getSalesTeam } from "@/lib/auth";
 import { generateBusinessSlug } from "@/lib/business-slug";
@@ -19,10 +17,7 @@ import {
   Building2, 
   CheckCircle2, 
   XCircle, 
-  Clock, 
   Search, 
-  Plus,
-  TrendingUp,
   FileText,
   Filter,
   X,
@@ -34,7 +29,6 @@ import {
   MapPin,
   UserCircle
 } from "lucide-react";
-import { DialogClose } from "@/components/ui/dialog";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -44,7 +38,6 @@ export default function DashboardPage() {
   const [areaFilter, setAreaFilter] = useState<string>("all");
   const [onboardedByFilter, setOnboardedByFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<BusinessStatus | "all">("all");
-  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [user, setUser] = useState(getStoredUser());
 
   useEffect(() => {
@@ -77,20 +70,6 @@ export default function DashboardPage() {
     setStoredUser(null);
     router.push("/login");
   };
-
-
-  const [newBusiness, setNewBusiness] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    address: "",
-    city: "",
-    area: "",
-    category: "" as BusinessCategory | "",
-    googleBusinessReviewLink: "",
-    paymentPlan: "" as "qr-basic" | "qr-plus" | "",
-    status: "active" as BusinessStatus,
-  });
 
   // Get businesses based on user role
   const availableBusinesses = useMemo(() => {
@@ -216,37 +195,6 @@ export default function DashboardPage() {
     router.push(`/dashboard/business/${slug}`);
   };
 
-  const handleOnboardBusiness = () => {
-    if (!user) return;
-    
-    // Create business with salesTeamId if user is sales team
-    const businessData = {
-      ...newBusiness,
-      salesTeamId: user.role === "sales-team" ? user.id : undefined,
-      feedbackTone: "professional" as const,
-      autoReplyEnabled: false,
-    };
-    
-    addBusiness(businessData);
-    
-    setIsOnboardingOpen(false);
-    setNewBusiness({
-      name: "",
-      email: "",
-      phone: "",
-      address: "",
-      city: "",
-      area: "",
-      category: "" as BusinessCategory | "",
-      googleBusinessReviewLink: "",
-      paymentPlan: "" as "qr-basic" | "qr-plus" | "",
-      status: "active" as BusinessStatus,
-    });
-    
-    // Refresh the page to show new business
-    window.location.reload();
-  };
-
   const getStatusBadge = (status: BusinessStatus) => {
     const variants = {
       active: "default",
@@ -280,156 +228,6 @@ export default function DashboardPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            {(user?.role === "admin" || user?.role === "sales-team") && (
-              <Dialog open={isOnboardingOpen} onOpenChange={setIsOnboardingOpen}>
-                <DialogTrigger asChild>
-                  <Button className="gap-2">
-                    <Plus className="h-4 w-4" />
-                    Onboard New Business
-                  </Button>
-                </DialogTrigger>
-              <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0 overflow-hidden [&>button]:hidden">
-                <DialogHeader className="sticky top-0 z-10 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border-b border-border px-6 py-4 relative">
-                  <DialogClose className="absolute right-4 top-4 opacity-70 transition-opacity hover:opacity-100 focus:outline-none disabled:pointer-events-none">
-                    <X className="h-4 w-4" />
-                    <span className="sr-only">Close</span>
-                  </DialogClose>
-                  <DialogTitle className="text-xl font-semibold pr-8">Onboard New Business</DialogTitle>
-                  <DialogDescription className="text-sm mt-1">
-                    Add a new business to start collecting feedback and reviews.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="flex-1 overflow-y-auto px-6 py-4">
-              <div className="grid gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="name">Business Name *</Label>
-                  <Input
-                    id="name"
-                    placeholder="Enter business name"
-                    value={newBusiness.name}
-                    onChange={(e) => setNewBusiness({ ...newBusiness, name: e.target.value })}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="email">Email *</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="business@example.com"
-                    value={newBusiness.email}
-                    onChange={(e) => setNewBusiness({ ...newBusiness, email: e.target.value })}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="phone">Phone</Label>
-                  <Input
-                    id="phone"
-                    type="tel"
-                    placeholder="+91 98765 43210"
-                    value={newBusiness.phone}
-                    onChange={(e) => setNewBusiness({ ...newBusiness, phone: e.target.value })}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="address">Address</Label>
-                  <Input
-                    id="address"
-                    placeholder="123 Main St, City, State 12345"
-                    value={newBusiness.address}
-                    onChange={(e) => setNewBusiness({ ...newBusiness, address: e.target.value })}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="city">City</Label>
-                    <Input
-                      id="city"
-                      placeholder="Mumbai"
-                      value={newBusiness.city}
-                      onChange={(e) => setNewBusiness({ ...newBusiness, city: e.target.value })}
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="area">Area</Label>
-                    <Input
-                      id="area"
-                      placeholder="Bandra"
-                      value={newBusiness.area}
-                      onChange={(e) => setNewBusiness({ ...newBusiness, area: e.target.value })}
-                    />
-                  </div>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="category">Category *</Label>
-                  <Select
-                    value={newBusiness.category}
-                    onValueChange={(value) => setNewBusiness({ ...newBusiness, category: value as BusinessCategory })}
-                  >
-                    <SelectTrigger id="category">
-                      <SelectValue placeholder="Select category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="restaurant">Restaurant</SelectItem>
-                      <SelectItem value="retail">Retail</SelectItem>
-                      <SelectItem value="healthcare">Healthcare</SelectItem>
-                      <SelectItem value="beauty">Beauty</SelectItem>
-                      <SelectItem value="fitness">Fitness</SelectItem>
-                      <SelectItem value="automotive">Automotive</SelectItem>
-                      <SelectItem value="real-estate">Real Estate</SelectItem>
-                      <SelectItem value="education">Education</SelectItem>
-                      <SelectItem value="hospitality">Hospitality</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="google-review-link">Google Business Review Link</Label>
-                  <Input
-                    id="google-review-link"
-                    type="url"
-                    placeholder="https://g.page/r/your-business/review"
-                    value={newBusiness.googleBusinessReviewLink}
-                    onChange={(e) => setNewBusiness({ ...newBusiness, googleBusinessReviewLink: e.target.value })}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Optional: Add your Google Business review link to redirect customers after feedback
-                  </p>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="payment-plan">Choose Plan *</Label>
-                  <Select
-                    value={newBusiness.paymentPlan}
-                    onValueChange={(value) => setNewBusiness({ ...newBusiness, paymentPlan: value as "qr-basic" | "qr-plus" })}
-                  >
-                    <SelectTrigger id="payment-plan">
-                      <SelectValue placeholder="Select a plan" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="qr-basic">QR-Basic</SelectItem>
-                      <SelectItem value="qr-plus">QR-Plus</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Select a payment plan for this business
-                  </p>
-                </div>
-              </div>
-                </div>
-              <DialogFooter className="sticky bottom-0 z-10 bg-background border-t border-border px-6 py-4">
-                <Button variant="outline" onClick={() => setIsOnboardingOpen(false)}>
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleOnboardBusiness}
-                  disabled={!newBusiness.name || !newBusiness.email || !newBusiness.category || !newBusiness.paymentPlan}
-                >
-                  Create Business
-                </Button>
-              </DialogFooter>
-              </DialogContent>
-            </Dialog>
-            )}
-
             {user && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

@@ -2,6 +2,8 @@
 // In a real app, this would integrate with your backend/auth service
 
 import { UserRole } from "./types";
+import { getBusinessByEmail, BUSINESS_CREDENTIALS } from "./mock-data";
+import { generateBusinessSlug } from "./business-slug";
 
 export interface User {
   id: string;
@@ -10,6 +12,7 @@ export interface User {
   role: UserRole;
   phone?: string;
   createdAt?: string;
+  businessId?: string; // For business users, link to their business
 }
 
 // Mock users for development
@@ -56,6 +59,26 @@ export async function login(email: string, password: string): Promise<{ success:
       success: true,
       user: salesUser,
     };
+  }
+
+  // Check if it's a business user
+  const business = getBusinessByEmail(normalizedEmail);
+  if (business) {
+    const businessPassword = BUSINESS_CREDENTIALS[business.email.toLowerCase()];
+    if (businessPassword && password === businessPassword) {
+      return {
+        success: true,
+        user: {
+          id: `business-user-${business.id}`,
+          email: business.email,
+          name: business.name,
+          role: "business" as UserRole,
+          phone: business.phone,
+          businessId: business.id,
+          createdAt: business.createdAt,
+        },
+      };
+    }
   }
 
   return {
