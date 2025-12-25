@@ -20,6 +20,8 @@ export const mockBusinesses: Business[] = [
     autoReplyEnabled: true,
     paymentPlan: "qr-plus",
     paymentStatus: "active",
+    paymentExpiryDate: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString(), // 45 days from now (within 60 days - due date)
+    billingDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 days ago
     totalReviews: 245,
     activeReviews: 198,
     inactiveReviews: 35,
@@ -42,7 +44,9 @@ export const mockBusinesses: Business[] = [
     feedbackTone: "professional",
     autoReplyEnabled: true,
     paymentPlan: "qr-basic",
-    paymentStatus: "active",
+    paymentStatus: "past-due",
+    paymentExpiryDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(), // 90 days from now
+    billingDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days ago (pending)
     totalReviews: 189,
     activeReviews: 156,
     inactiveReviews: 28,
@@ -66,6 +70,8 @@ export const mockBusinesses: Business[] = [
     autoReplyEnabled: false,
     paymentPlan: "qr-basic",
     paymentStatus: "past-due",
+    paymentExpiryDate: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(), // 10 days ago (expired)
+    billingDate: new Date(Date.now() - 35 * 24 * 60 * 60 * 1000).toISOString(), // 35 days ago (inactive due to > 30 days pending)
     totalReviews: 92,
     activeReviews: 67,
     inactiveReviews: 20,
@@ -87,6 +93,8 @@ export const mockBusinesses: Business[] = [
     autoReplyEnabled: false,
     paymentPlan: "qr-basic",
     paymentStatus: "active",
+    paymentExpiryDate: new Date(Date.now() + 120 * 24 * 60 * 60 * 1000).toISOString(), // 120 days from now
+    billingDate: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(), // 10 days ago
     salesTeamId: "sales-1", // Example: assigned to a sales team member
     totalReviews: 0,
     activeReviews: 0,
@@ -111,6 +119,8 @@ export const mockBusinesses: Business[] = [
     autoReplyEnabled: true,
     paymentPlan: "qr-plus",
     paymentStatus: "active",
+    paymentExpiryDate: new Date(Date.now() + 100 * 24 * 60 * 60 * 1000).toISOString(), // 100 days from now
+    billingDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days ago
     totalReviews: 312,
     activeReviews: 278,
     inactiveReviews: 30,

@@ -132,7 +132,7 @@ export default function LoginPage() {
 
             <Button
               type="submit"
-              className="w-full gap-2"
+              className="w-full gap-2 h-[48px]"
               disabled={isLoading}
             >
               {isLoading ? (

@@ -15,6 +15,7 @@ import { Separator } from "@/components/ui/separator";
 import { addBusiness } from "@/lib/mock-data";
 import { BusinessStatus, BusinessCategory } from "@/lib/types";
 import { logout, setStoredUser, getStoredUser } from "@/lib/auth";
+import { generateQRCodeDataUrl } from "@/lib/qr-utils";
 import { 
   LogOut,
   ChevronDown,
@@ -24,7 +25,10 @@ import {
   Check,
   Star,
   CreditCard,
-  Calendar
+  Calendar,
+  XCircle,
+  Clock,
+  Loader2
 } from "lucide-react";
 
 export default function SalesDashboardPage() {
@@ -77,8 +81,106 @@ export default function SalesDashboardPage() {
     googleBusinessReviewLink: "",
     paymentPlan: "" as "qr-basic" | "qr-plus" | "",
     status: "active" as BusinessStatus,
+    paymentExpiryDate: "",
+    paymentStatus: undefined as "active" | "past-due" | "cancelled" | undefined,
   });
 
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [paymentStatus, setPaymentStatus] = useState<"pending" | "success" | "failed" | "expired">("pending");
+  const [paymentQRCode, setPaymentQRCode] = useState<string | null>(null);
+  const [paymentTimer, setPaymentTimer] = useState(900); // 15 minutes in seconds
+  const [paymentSessionId, setPaymentSessionId] = useState<string | null>(null);
+
+
+  // Payment timer countdown
+  useEffect(() => {
+    if (showPaymentDialog && paymentStatus === "pending" && paymentTimer > 0) {
+      const interval = setInterval(() => {
+        setPaymentTimer((prev) => {
+          if (prev <= 1) {
+            setPaymentStatus("expired");
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [showPaymentDialog, paymentStatus, paymentTimer]);
+
+  // Simulate payment verification (polling)
+  useEffect(() => {
+    if (showPaymentDialog && paymentStatus === "pending" && paymentSessionId) {
+      // Simulate payment verification - in real app, this would poll your payment gateway
+      const checkPayment = async () => {
+        // Simulate random payment success after 5-10 seconds
+        const delay = Math.random() * 5000 + 5000;
+        setTimeout(() => {
+          // 90% success rate for demo
+          if (Math.random() > 0.1) {
+            setPaymentStatus("success");
+            // Update form state with payment expiry date (1 year from now)
+            const expiryDate = new Date();
+            expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+            setNewBusiness((prev) => ({
+              ...prev,
+              paymentExpiryDate: expiryDate.toISOString(),
+              paymentStatus: "active",
+            }));
+          } else {
+            setPaymentStatus("failed");
+          }
+        }, delay);
+      };
+      checkPayment();
+    }
+  }, [showPaymentDialog, paymentStatus, paymentSessionId]);
+
+  // Generate payment QR code when dialog opens
+  useEffect(() => {
+    if (showPaymentDialog && newBusiness.paymentPlan && !paymentQRCode) {
+      const generatePaymentQR = async () => {
+        try {
+          const planPrice = newBusiness.paymentPlan === "qr-plus" ? "5999" : "2499";
+          const planName = newBusiness.paymentPlan === "qr-plus" ? "QR-Plus" : "QR-Basic";
+          const businessName = newBusiness.name || "New Business";
+          const sessionId = `payment-${Date.now()}`;
+          setPaymentSessionId(sessionId);
+          
+          // Generate UPI payment URL (format: upi://pay?pa=merchant@upi&pn=MerchantName&am=Amount&cu=INR&tn=TransactionNote)
+          // For demo, we'll use a generic payment URL
+          const paymentUrl = `upi://pay?pa=tribly@pay&pn=Tribly%20QR&am=${planPrice}&cu=INR&tn=${planName}%20Subscription%20-%20${encodeURIComponent(businessName)}`;
+          
+          const qrCode = await generateQRCodeDataUrl(paymentUrl);
+          setPaymentQRCode(qrCode);
+          setPaymentStatus("pending");
+          setPaymentTimer(900); // Reset to 15 minutes
+        } catch (error) {
+          console.error("Error generating payment QR code:", error);
+          setPaymentStatus("failed");
+        }
+      };
+      generatePaymentQR();
+    }
+  }, [showPaymentDialog, newBusiness.paymentPlan, newBusiness.name, paymentQRCode]);
+
+  // Reset payment state when dialog closes
+  useEffect(() => {
+    if (!showPaymentDialog) {
+      // Reset after a delay to allow success state to be visible
+      setTimeout(() => {
+        setPaymentQRCode(null);
+        setPaymentStatus("pending");
+        setPaymentTimer(900);
+        setPaymentSessionId(null);
+      }, paymentStatus === "success" ? 2000 : 0);
+    }
+  }, [showPaymentDialog, paymentStatus]);
+
+  const handleCompletePayment = () => {
+    if (!newBusiness.paymentPlan) return;
+    setShowPaymentDialog(true);
+  };
 
   const handleOnboardBusiness = () => {
     if (!user) return;
@@ -106,6 +208,8 @@ export default function SalesDashboardPage() {
       googleBusinessReviewLink: "",
       paymentPlan: "" as "qr-basic" | "qr-plus" | "",
       status: "active" as BusinessStatus,
+      paymentExpiryDate: "",
+      paymentStatus: undefined,
     });
     
     // Show success message (you can add a toast notification here)
@@ -543,17 +647,26 @@ export default function SalesDashboardPage() {
                   <div className="mt-1 flex items-center gap-2">
                     <Calendar className="h-4 w-4 text-muted-foreground" />
                     <span className="text-lg font-semibold">
-                      Not set
+                      {newBusiness.paymentExpiryDate
+                        ? new Date(newBusiness.paymentExpiryDate).toLocaleDateString("en-IN", {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                          })
+                        : "Not set"}
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Payment will be completed after business creation
+                    {newBusiness.paymentStatus === "active"
+                      ? "Payment completed successfully"
+                      : "Click 'Complete Payment' to process payment"}
                   </p>
                 </div>
                 <Button
                   size="lg"
                   className="gap-2"
                   disabled={!newBusiness.paymentPlan}
+                  onClick={handleCompletePayment}
                 >
                   <CreditCard className="h-5 w-5" />
                   Complete Payment
@@ -581,6 +694,8 @@ export default function SalesDashboardPage() {
                       googleBusinessReviewLink: "",
                       paymentPlan: "" as "qr-basic" | "qr-plus" | "",
                       status: "active" as BusinessStatus,
+                      paymentExpiryDate: "",
+                      paymentStatus: undefined,
                     });
                   }}
                 >
@@ -599,6 +714,209 @@ export default function SalesDashboardPage() {
           </Card>
         </div>
       </div>
+
+      {/* Payment Dialog */}
+      <Dialog open={showPaymentDialog} onOpenChange={(open) => {
+        if (paymentStatus === "success") {
+          // Auto-close after showing success for 2 seconds
+          setTimeout(() => setShowPaymentDialog(false), 2000);
+        } else if (paymentStatus === "pending") {
+          // Warn user before closing during pending payment
+          if (window.confirm("Payment is still pending. Are you sure you want to close?")) {
+            setShowPaymentDialog(false);
+          }
+        } else {
+          setShowPaymentDialog(false);
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {paymentStatus === "success" ? (
+                <>
+                  <CheckCircle2 className="h-5 w-5 text-green-600" />
+                  Payment Successful
+                </>
+              ) : paymentStatus === "failed" ? (
+                <>
+                  <XCircle className="h-5 w-5 text-red-600" />
+                  Payment Failed
+                </>
+              ) : paymentStatus === "expired" ? (
+                <>
+                  <Clock className="h-5 w-5 text-orange-600" />
+                  Payment Expired
+                </>
+              ) : paymentStatus === "pending" && paymentQRCode ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  Payment Pending
+                </>
+              ) : (
+                <>
+                  <CreditCard className="h-5 w-5" />
+                  Complete Payment
+                </>
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              {paymentStatus === "pending" && paymentQRCode && "Scan the QR code to complete your payment"}
+              {paymentStatus === "pending" && !paymentQRCode && "Generating payment QR code..."}
+              {paymentStatus === "success" && "Your payment has been processed successfully"}
+              {paymentStatus === "failed" && "Your payment could not be processed"}
+              {paymentStatus === "expired" && "The payment session has expired"}
+              {!paymentStatus && "Scan the QR code to complete your payment"}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 py-4">
+            {/* Plan Details */}
+            {newBusiness.paymentPlan && (
+              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {newBusiness.paymentPlan === "qr-plus" ? (
+                      <>
+                        <Crown className="h-5 w-5 text-primary" />
+                        <span className="font-semibold">QR-Plus</span>
+                        <Badge variant="secondary" className="text-xs">Premium</Badge>
+                      </>
+                    ) : (
+                      <>
+                        <Shield className="h-5 w-5" />
+                        <span className="font-semibold">QR-Basic</span>
+                      </>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-bold">
+                      ₹{newBusiness.paymentPlan === "qr-plus" ? "5,999" : "2,499"}
+                    </div>
+                    <div className="text-xs text-muted-foreground">per year</div>
+                  </div>
+                </div>
+                <Separator />
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Business:</span>
+                  <span className="font-medium">{newBusiness.name || "New Business"}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Payment Status */}
+            {paymentStatus === "pending" && (
+              <>
+                {paymentQRCode ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-center p-6 border-2 border-dashed rounded-lg bg-white">
+                      <img
+                        src={paymentQRCode}
+                        alt="Payment QR Code"
+                        className="max-w-[250px] h-auto"
+                      />
+                    </div>
+                    <div className="text-center space-y-2">
+                      <p className="text-sm font-medium">Scan with your UPI app</p>
+                      <p className="text-xs text-muted-foreground">
+                        Time remaining: {Math.floor(paymentTimer / 60)}:{(paymentTimer % 60).toString().padStart(2, "0")}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 justify-center text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Waiting for payment confirmation...</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center p-8">
+                    <div className="text-center space-y-2">
+                      <Loader2 className="h-8 w-8 mx-auto animate-spin text-primary" />
+                      <p className="text-sm text-muted-foreground">Generating payment QR code...</p>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {paymentStatus === "success" && (
+              <div className="text-center space-y-4 py-4">
+                <div className="mx-auto w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
+                  <CheckCircle2 className="h-10 w-10 text-green-600" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-lg font-semibold">Payment Successful!</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Your payment has been processed. You can now create the business.
+                  </p>
+                </div>
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Plan expires:</span>
+                    <span className="font-medium">
+                      {newBusiness.paymentExpiryDate
+                        ? new Date(newBusiness.paymentExpiryDate).toLocaleDateString("en-IN", {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                          })
+                        : "1 year from now"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {paymentStatus === "failed" && (
+              <div className="text-center space-y-4 py-4">
+                <div className="mx-auto w-16 h-16 rounded-full bg-red-100 flex items-center justify-center">
+                  <XCircle className="h-10 w-10 text-red-600" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-lg font-semibold">Payment Failed</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Your payment could not be processed. Please try again.
+                  </p>
+                </div>
+                <Button
+                  onClick={() => {
+                    setPaymentStatus("pending");
+                    setPaymentQRCode(null);
+                    setPaymentTimer(900);
+                    setPaymentSessionId(null);
+                  }}
+                  className="w-full"
+                >
+                  Try Again
+                </Button>
+              </div>
+            )}
+
+            {paymentStatus === "expired" && (
+              <div className="text-center space-y-4 py-4">
+                <div className="mx-auto w-16 h-16 rounded-full bg-orange-100 flex items-center justify-center">
+                  <Clock className="h-10 w-10 text-orange-600" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-lg font-semibold">Payment Expired</h3>
+                  <p className="text-sm text-muted-foreground">
+                    The payment session has expired. Please start a new payment.
+                  </p>
+                </div>
+                <Button
+                  onClick={() => {
+                    setPaymentStatus("pending");
+                    setPaymentQRCode(null);
+                    setPaymentTimer(900);
+                    setPaymentSessionId(null);
+                  }}
+                  className="w-full"
+                >
+                  Start New Payment
+                </Button>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

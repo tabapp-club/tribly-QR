@@ -57,6 +57,14 @@ import {
   Target,
   TrendingDown,
   Award,
+  Eye,
+  FileText,
+  MapPin,
+  Globe,
+  Navigation,
+  FileImage,
+  CheckCircle,
+  AlertTriangle,
 } from "lucide-react";
 
 export default function BusinessDetailPage() {
@@ -521,60 +529,109 @@ export default function BusinessDetailPage() {
           </div>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2 lg:grid-cols-8 bg-white/80 backdrop-blur-sm border border-purple-100 p-1 rounded-lg shadow-sm">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col lg:flex-row gap-6">
+          <TabsList className="flex flex-col lg:w-64 w-full bg-white/80 backdrop-blur-sm border border-purple-100 p-2 rounded-lg shadow-sm h-fit space-y-1">
             <TabsTrigger 
               value="overview"
-              className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all"
+              className="w-full justify-start data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all py-3 h-auto"
             >
-              Overview
+              <div className="flex items-start gap-3 w-full">
+                <Activity className="h-5 w-5 mt-0.5 flex-shrink-0" />
+                <div className="flex flex-col items-start gap-0.5 flex-1">
+                  <span className="font-medium">Overview</span>
+                  <span className="text-xs opacity-70">Business details & info</span>
+                </div>
+              </div>
             </TabsTrigger>
             <TabsTrigger 
               value="gmb-health"
-              className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all"
+              className="w-full justify-start data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all py-3 h-auto"
             >
-              GMB Health
+              <div className="flex items-start gap-3 w-full">
+                <Target className="h-5 w-5 mt-0.5 flex-shrink-0" />
+                <div className="flex flex-col items-start gap-0.5 flex-1">
+                  <span className="font-medium">Google Business Health</span>
+                  <span className="text-xs opacity-70">Profile performance</span>
+                </div>
+              </div>
             </TabsTrigger>
             <TabsTrigger 
               value="keywords"
-              className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all"
+              className="w-full justify-start data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all py-3 h-auto"
             >
-              Keywords
+              <div className="flex items-start gap-3 w-full">
+                <Hash className="h-5 w-5 mt-0.5 flex-shrink-0" />
+                <div className="flex flex-col items-start gap-0.5 flex-1">
+                  <span className="font-medium">Keywords</span>
+                  <span className="text-xs opacity-70">Manage search terms</span>
+                </div>
+              </div>
             </TabsTrigger>
             <TabsTrigger 
               value="links"
-              className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all"
+              className="w-full justify-start data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all py-3 h-auto"
             >
-              Links & QR
+              <div className="flex items-start gap-3 w-full">
+                <ExternalLink className="h-5 w-5 mt-0.5 flex-shrink-0" />
+                <div className="flex flex-col items-start gap-0.5 flex-1">
+                  <span className="font-medium">Links & QR</span>
+                  <span className="text-xs opacity-70">Review URLs & codes</span>
+                </div>
+              </div>
             </TabsTrigger>
             <TabsTrigger 
               value="auto-reply"
-              className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all"
+              className="w-full justify-start data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all py-3 h-auto"
             >
-              Auto Reply
-            </TabsTrigger>
-            <TabsTrigger 
-              value="reports"
-              className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all"
-            >
-              Reports
+              <div className="flex items-start gap-3 w-full">
+                <Bot className="h-5 w-5 mt-0.5 flex-shrink-0" />
+                <div className="flex flex-col items-start gap-0.5 flex-1">
+                  <span className="font-medium">Auto Reply</span>
+                  <span className="text-xs opacity-70">Automated responses</span>
+                </div>
+              </div>
             </TabsTrigger>
             <TabsTrigger 
               value="reviews"
-              className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all"
+              className="w-full justify-start data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all py-3 h-auto"
             >
-              Reviews
+              <div className="flex items-start gap-3 w-full">
+                <Star className="h-5 w-5 mt-0.5 flex-shrink-0" />
+                <div className="flex flex-col items-start gap-0.5 flex-1">
+                  <span className="font-medium">Reviews</span>
+                  <span className="text-xs opacity-70">Customer feedback</span>
+                </div>
+              </div>
+            </TabsTrigger>
+            <TabsTrigger 
+              value="auto-qr-impact"
+              className="w-full justify-start data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all py-3 h-auto"
+            >
+              <div className="flex items-start gap-3 w-full">
+                <TrendingUp className="h-5 w-5 mt-0.5 flex-shrink-0" />
+                <div className="flex flex-col items-start gap-0.5 flex-1">
+                  <span className="font-medium">Auto QR Impact</span>
+                  <span className="text-xs opacity-70">ROI & performance</span>
+                </div>
+              </div>
             </TabsTrigger>
             <TabsTrigger 
               value="payment"
-              className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all"
+              className="w-full justify-start data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all py-3 h-auto"
             >
-              Payment
+              <div className="flex items-start gap-3 w-full">
+                <CreditCard className="h-5 w-5 mt-0.5 flex-shrink-0" />
+                <div className="flex flex-col items-start gap-0.5 flex-1">
+                  <span className="font-medium">Payment</span>
+                  <span className="text-xs opacity-70">Billing & subscription</span>
+                </div>
+              </div>
             </TabsTrigger>
           </TabsList>
 
+          <div className="flex-1 min-w-0">
           {/* Overview Tab */}
-          <TabsContent value="overview" className="space-y-6">
+          <TabsContent value="overview" className="space-y-6 mt-0">
             <Card>
               <CardHeader>
                 <CardTitle>Business Information</CardTitle>
@@ -679,53 +736,334 @@ export default function BusinessDetailPage() {
           </TabsContent>
 
           {/* GMB Health Tab */}
-          <TabsContent value="gmb-health" className="space-y-6">
-            {/* Current Ranking */}
+          <TabsContent value="gmb-health" className="space-y-6 mt-0">
+            {/* Visibility Metrics */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Activity className="h-5 w-5" />
-                  Current GMB Ranking
+                  <Eye className="h-5 w-5" />
+                  Visibility Metrics
                 </CardTitle>
-                <CardDescription>Your Google My Business performance metrics</CardDescription>
+                <CardDescription>Your business visibility and search performance metrics</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="p-4 rounded-lg bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20">
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="p-4 rounded-lg bg-gradient-to-br from-blue-50 to-blue-50/50 border border-blue-100">
                     <div className="flex items-center justify-between mb-2">
-                      <Label className="text-sm font-medium text-muted-foreground">Overall Ranking</Label>
-                      <Award className="h-4 w-4 text-primary" />
+                      <Label className="text-sm font-medium text-muted-foreground">Ranking</Label>
+                      <Award className="h-4 w-4 text-blue-600" />
                     </div>
-                    <div className="text-3xl font-bold mb-1">#3</div>
-                    <p className="text-xs text-muted-foreground">Out of 12 competitors</p>
+                    <div className="text-2xl font-bold mb-1">#3</div>
+                    <p className="text-xs text-muted-foreground">Local pack position</p>
                     <div className="mt-2 flex items-center gap-1 text-xs text-green-600">
                       <TrendingUp className="h-3 w-3" />
-                      <span>Up 2 positions this month</span>
+                      <span>Up 2 spots</span>
                     </div>
                   </div>
                   <div className="p-4 rounded-lg bg-muted/50 border">
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-sm font-medium text-muted-foreground">Search Impressions</Label>
+                      <Search className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="text-2xl font-bold mb-1">12.4K</div>
+                    <p className="text-xs text-muted-foreground">Last 30 days</p>
+                    <div className="mt-2 flex items-center gap-1 text-xs text-green-600">
+                      <TrendingUp className="h-3 w-3" />
+                      <span>+18% vs last month</span>
+                    </div>
+                  </div>
+                  <div className="p-4 rounded-lg bg-muted/50 border">
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-sm font-medium text-muted-foreground">Map Views vs Search</Label>
+                      <MapPin className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="text-2xl font-bold mb-1">65/35</div>
+                    <p className="text-xs text-muted-foreground">Map 65% | Search 35%</p>
+                    <div className="mt-2 flex items-center gap-1 text-xs text-blue-600">
+                      <BarChart3 className="h-3 w-3" />
+                      <span>Balanced distribution</span>
+                    </div>
+                  </div>
+                  <div className="p-4 rounded-lg bg-muted/50 border">
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-sm font-medium text-muted-foreground">Direct vs Discovery</Label>
+                      <Target className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="text-2xl font-bold mb-1">42/58</div>
+                    <p className="text-xs text-muted-foreground">Direct 42% | Discovery 58%</p>
+                    <div className="mt-2 flex items-center gap-1 text-xs text-green-600">
+                      <TrendingUp className="h-3 w-3" />
+                      <span>+5% discovery</span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Trust & Reputation */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="h-5 w-5" />
+                  Trust & Reputation
+                </CardTitle>
+                <CardDescription>Review performance and customer trust indicators</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                  <div className="p-4 rounded-lg bg-gradient-to-br from-yellow-50 to-yellow-50/50 border border-yellow-100">
                     <div className="flex items-center justify-between mb-2">
                       <Label className="text-sm font-medium text-muted-foreground">Average Rating</Label>
                       <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
                     </div>
-                    <div className="text-3xl font-bold mb-1">4.7</div>
-                    <p className="text-xs text-muted-foreground">Based on 245 reviews</p>
+                    <div className="text-2xl font-bold mb-1">4.7</div>
+                    <p className="text-xs text-muted-foreground">Out of 5.0</p>
                     <div className="mt-2 flex items-center gap-1 text-xs text-green-600">
                       <TrendingUp className="h-3 w-3" />
-                      <span>+0.2 from last month</span>
+                      <span>+0.2 this month</span>
                     </div>
                   </div>
                   <div className="p-4 rounded-lg bg-muted/50 border">
                     <div className="flex items-center justify-between mb-2">
-                      <Label className="text-sm font-medium text-muted-foreground">Search Visibility</Label>
-                      <BarChart3 className="h-4 w-4 text-primary" />
+                      <Label className="text-sm font-medium text-muted-foreground">Total Reviews</Label>
+                      <MessageSquare className="h-4 w-4 text-primary" />
                     </div>
-                    <div className="text-3xl font-bold mb-1">78%</div>
-                    <p className="text-xs text-muted-foreground">Local search impressions</p>
+                    <div className="text-2xl font-bold mb-1">245</div>
+                    <p className="text-xs text-muted-foreground">All time</p>
                     <div className="mt-2 flex items-center gap-1 text-xs text-green-600">
                       <TrendingUp className="h-3 w-3" />
-                      <span>+5% from last month</span>
+                      <span>+12 this month</span>
                     </div>
+                  </div>
+                  <div className="p-4 rounded-lg bg-muted/50 border">
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-sm font-medium text-muted-foreground">Review Velocity</Label>
+                      <Activity className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="text-2xl font-bold mb-1">12</div>
+                    <p className="text-xs text-muted-foreground">Reviews/month</p>
+                    <div className="mt-2 flex items-center gap-1 text-xs text-green-600">
+                      <TrendingUp className="h-3 w-3" />
+                      <span>+3 vs last month</span>
+                    </div>
+                  </div>
+                  <div className="p-4 rounded-lg bg-muted/50 border">
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-sm font-medium text-muted-foreground">% Reviews Responded</Label>
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                    </div>
+                    <div className="text-2xl font-bold mb-1">94%</div>
+                    <p className="text-xs text-muted-foreground">230 of 245</p>
+                    <div className="mt-2 flex items-center gap-1 text-xs text-green-600">
+                      <CheckCircle className="h-3 w-3" />
+                      <span>Excellent</span>
+                    </div>
+                  </div>
+                  <div className="p-4 rounded-lg bg-muted/50 border">
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-sm font-medium text-muted-foreground">Response Time</Label>
+                      <Clock className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="text-2xl font-bold mb-1">4.2h</div>
+                    <p className="text-xs text-muted-foreground">Average</p>
+                    <div className="mt-2 flex items-center gap-1 text-xs text-green-600">
+                      <TrendingDown className="h-3 w-3" />
+                      <span>-0.8h faster</span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Profile Completeness */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Profile Completeness
+                </CardTitle>
+                <CardDescription>Your Google Business profile completion status</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="p-4 rounded-lg bg-muted/50 border">
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-sm font-medium text-muted-foreground">Business Description</Label>
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                    </div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="text-2xl font-bold">Complete</div>
+                      <Badge variant="default" className="bg-green-600">100%</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">280 characters</p>
+                  </div>
+                  <div className="p-4 rounded-lg bg-muted/50 border">
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-sm font-medium text-muted-foreground">Categories</Label>
+                      <Hash className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="text-2xl font-bold">2</div>
+                      <Badge variant="default" className="bg-green-600">Complete</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Primary + 1 secondary</p>
+                  </div>
+                  <div className="p-4 rounded-lg bg-muted/50 border">
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-sm font-medium text-muted-foreground">Services/Products</Label>
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                    </div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="text-2xl font-bold">8</div>
+                      <Badge variant="default" className="bg-green-600">Added</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Items listed</p>
+                  </div>
+                  <div className="p-4 rounded-lg bg-muted/50 border">
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-sm font-medium text-muted-foreground">Photos</Label>
+                      <FileImage className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="text-2xl font-bold">42</div>
+                      <Badge variant="default" className="bg-blue-600">Good</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Last updated 3 days ago</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Posts Frequency */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <MessageSquare className="h-5 w-5" />
+                  Posts Frequency
+                </CardTitle>
+                <CardDescription>Your Google Business posts activity and frequency</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="p-4 rounded-lg bg-gradient-to-br from-purple-50 to-purple-50/50 border border-purple-100">
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-sm font-medium text-muted-foreground">This Month</Label>
+                      <MessageSquare className="h-4 w-4 text-purple-600" />
+                    </div>
+                    <div className="text-2xl font-bold mb-1">8</div>
+                    <p className="text-xs text-muted-foreground">Posts published</p>
+                    <div className="mt-2 flex items-center gap-1 text-xs text-green-600">
+                      <TrendingUp className="h-3 w-3" />
+                      <span>On track (target: 8)</span>
+                    </div>
+                  </div>
+                  <div className="p-4 rounded-lg bg-muted/50 border">
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-sm font-medium text-muted-foreground">Last 30 Days</Label>
+                      <Calendar className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="text-2xl font-bold mb-1">2.1/wk</div>
+                    <p className="text-xs text-muted-foreground">Average frequency</p>
+                    <div className="mt-2 flex items-center gap-1 text-xs text-blue-600">
+                      <BarChart3 className="h-3 w-3" />
+                      <span>Consistent</span>
+                    </div>
+                  </div>
+                  <div className="p-4 rounded-lg bg-muted/50 border">
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-sm font-medium text-muted-foreground">Last Post</Label>
+                      <Clock className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="text-2xl font-bold mb-1">2d</div>
+                    <p className="text-xs text-muted-foreground">Days ago</p>
+                    <div className="mt-2 flex items-center gap-1 text-xs text-green-600">
+                      <CheckCircle className="h-3 w-3" />
+                      <span>Recent</span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Engagement */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Zap className="h-5 w-5" />
+                  Engagement
+                </CardTitle>
+                <CardDescription>Customer engagement and interaction metrics</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="p-4 rounded-lg bg-gradient-to-br from-green-50 to-green-50/50 border border-green-100">
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-sm font-medium text-muted-foreground">Calls</Label>
+                      <Phone className="h-4 w-4 text-green-600" />
+                    </div>
+                    <div className="text-2xl font-bold mb-1">342</div>
+                    <p className="text-xs text-muted-foreground">Last 30 days</p>
+                    <div className="mt-2 flex items-center gap-1 text-xs text-green-600">
+                      <TrendingUp className="h-3 w-3" />
+                      <span>+24% vs last month</span>
+                    </div>
+                  </div>
+                  <div className="p-4 rounded-lg bg-muted/50 border">
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-sm font-medium text-muted-foreground">Website Clicks</Label>
+                      <Globe className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="text-2xl font-bold mb-1">1,248</div>
+                    <p className="text-xs text-muted-foreground">Last 30 days</p>
+                    <div className="mt-2 flex items-center gap-1 text-xs text-green-600">
+                      <TrendingUp className="h-3 w-3" />
+                      <span>+15% vs last month</span>
+                    </div>
+                  </div>
+                  <div className="p-4 rounded-lg bg-muted/50 border">
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-sm font-medium text-muted-foreground">Direction Requests</Label>
+                      <Navigation className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="text-2xl font-bold mb-1">892</div>
+                    <p className="text-xs text-muted-foreground">Last 30 days</p>
+                    <div className="mt-2 flex items-center gap-1 text-xs text-green-600">
+                      <TrendingUp className="h-3 w-3" />
+                      <span>+8% vs last month</span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Overall Health Score */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Activity className="h-5 w-5" />
+                  Overall Health Score
+                </CardTitle>
+                <CardDescription>Comprehensive health score based on all metrics above</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="p-6 rounded-lg bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="font-semibold text-lg mb-1">Overall Health Score</h3>
+                      <p className="text-sm text-muted-foreground">Based on all metrics above</p>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-4xl font-bold text-primary">87</div>
+                      <p className="text-xs text-muted-foreground">Out of 100</p>
+                    </div>
+                  </div>
+                  <div className="w-full bg-muted rounded-full h-3 mb-2">
+                    <div className="bg-primary h-3 rounded-full" style={{ width: "87%" }}></div>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                    <span className="text-muted-foreground">Excellent health status</span>
+                    <Badge variant="default" className="bg-green-600 ml-auto">Top 15%</Badge>
                   </div>
                 </div>
               </CardContent>
@@ -930,25 +1268,34 @@ export default function BusinessDetailPage() {
                     </div>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
 
-                {/* Summary Insights */}
-                <div className="mt-4 pt-4 border-t">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                    <div className="p-3 rounded-lg bg-muted/50">
-                      <div className="text-xs text-muted-foreground mb-1">To reach #2</div>
-                      <div className="font-semibold">Need 144 more reviews</div>
-                      <div className="text-xs text-muted-foreground mt-1">+7% visibility improvement</div>
-                    </div>
-                    <div className="p-3 rounded-lg bg-muted/50">
-                      <div className="text-xs text-muted-foreground mb-1">To reach #1</div>
-                      <div className="font-semibold">Need 267 more reviews</div>
-                      <div className="text-xs text-muted-foreground mt-1">+14% visibility improvement</div>
-                    </div>
-                    <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
-                      <div className="text-xs text-muted-foreground mb-1">Your advantage</div>
-                      <div className="font-semibold">47+ reviews ahead of #4</div>
-                      <div className="text-xs text-muted-foreground mt-1">6% better visibility</div>
-                    </div>
+            {/* Ranking Insights */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5" />
+                  Ranking Insights
+                </CardTitle>
+                <CardDescription>Key insights to improve your ranking position</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                  <div className="p-3 rounded-lg bg-muted/50">
+                    <div className="text-xs text-muted-foreground mb-1">To reach #2</div>
+                    <div className="font-semibold">Need 144 more reviews</div>
+                    <div className="text-xs text-muted-foreground mt-1">+7% visibility improvement</div>
+                  </div>
+                  <div className="p-3 rounded-lg bg-muted/50">
+                    <div className="text-xs text-muted-foreground mb-1">To reach #1</div>
+                    <div className="font-semibold">Need 267 more reviews</div>
+                    <div className="text-xs text-muted-foreground mt-1">+14% visibility improvement</div>
+                  </div>
+                  <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+                    <div className="text-xs text-muted-foreground mb-1">Your advantage</div>
+                    <div className="font-semibold">47+ reviews ahead of #4</div>
+                    <div className="text-xs text-muted-foreground mt-1">6% better visibility</div>
                   </div>
                 </div>
               </CardContent>
@@ -956,7 +1303,7 @@ export default function BusinessDetailPage() {
           </TabsContent>
 
           {/* Keywords Tab */}
-          <TabsContent value="keywords" className="space-y-6">
+          <TabsContent value="keywords" className="space-y-6 mt-0">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -1084,7 +1431,7 @@ export default function BusinessDetailPage() {
           </TabsContent>
 
           {/* Links & QR Tab */}
-          <TabsContent value="links" className="space-y-6">
+          <TabsContent value="links" className="space-y-6 mt-0">
             <Card>
               <CardHeader>
                 <CardTitle>QR Code</CardTitle>
@@ -1245,7 +1592,7 @@ export default function BusinessDetailPage() {
           </TabsContent>
 
           {/* Auto Reply Tab */}
-          <TabsContent value="auto-reply" className="space-y-6">
+          <TabsContent value="auto-reply" className="space-y-6 mt-0">
             <Card>
               <CardHeader>
                 <CardTitle>Automatic Replies</CardTitle>
@@ -1292,6 +1639,16 @@ export default function BusinessDetailPage() {
                         </p>
                       </div>
                       <div className="space-y-2">
+                        <Label>Average Rating Response</Label>
+                        <Textarea
+                          placeholder="Thank you for your feedback. We value your input and are always working to improve our service..."
+                          className="min-h-[100px]"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          This message will be sent when customers rate their experience as "Average"
+                        </p>
+                      </div>
+                      <div className="space-y-2">
                         <Label>Need Improvement Rating Response</Label>
                         <Textarea
                           placeholder="We're sorry to hear about your experience. We'd like to make things right. Please contact us at..."
@@ -1320,72 +1677,8 @@ export default function BusinessDetailPage() {
             </Card>
           </TabsContent>
 
-          {/* Reports Tab */}
-          <TabsContent value="reports" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <CardTitle>Reports & Analytics</CardTitle>
-                    <CardDescription>View and download business reports</CardDescription>
-                  </div>
-                  <div className="flex gap-2">
-                    <Select defaultValue="weekly">
-                      <SelectTrigger className="w-[140px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="weekly">Weekly</SelectItem>
-                        <SelectItem value="monthly">Monthly</SelectItem>
-                        <SelectItem value="yearly">Yearly</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Button variant="outline" className="gap-2">
-                      <Download className="h-4 w-4" />
-                      Export
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium">This Week</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold">42</div>
-                      <p className="text-xs text-muted-foreground">New reviews</p>
-                      <p className="text-xs text-green-600 mt-1">+12% from last week</p>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium">Average Rating</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold">4.7</div>
-                      <p className="text-xs text-muted-foreground">Out of 5.0</p>
-                      <p className="text-xs text-green-600 mt-1">+0.2 from last week</p>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium">Response Rate</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold">94%</div>
-                      <p className="text-xs text-muted-foreground">Auto-replies sent</p>
-                      <p className="text-xs text-green-600 mt-1">+3% from last week</p>
-                    </CardContent>
-                  </Card>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
           {/* Reviews Tab */}
-          <TabsContent value="reviews" className="space-y-6">
+          <TabsContent value="reviews" className="space-y-6 mt-0">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -1502,7 +1795,256 @@ export default function BusinessDetailPage() {
           </TabsContent>
 
           {/* Payment Tab */}
-          <TabsContent value="payment" className="space-y-6">
+          {/* Auto QR Impact Tab */}
+          <TabsContent value="auto-qr-impact" className="space-y-6 mt-0">
+            {/* Hero Stats */}
+            <Card className="border-primary/20 bg-gradient-to-br from-purple-50/50 to-pink-50/50">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-primary" />
+                  Performance Overview
+                </CardTitle>
+                <CardDescription>Key metrics from your Auto QR implementation</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="p-5 bg-white/60 backdrop-blur-sm rounded-xl border border-gray-200/50 hover:border-gray-300/50 transition-all duration-200">
+                    <div className="flex items-start gap-4">
+                      <div className="h-10 w-10 rounded-lg bg-green-50 flex items-center justify-center flex-shrink-0">
+                        <Star className="h-5 w-5 text-green-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-gray-500 mb-1.5">Total Reviews Generated</p>
+                        <p className="text-2xl font-semibold text-gray-900 mb-0.5">{allReviews.length}</p>
+                        <p className="text-xs text-gray-400">via Auto QR</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-5 bg-white/60 backdrop-blur-sm rounded-xl border border-gray-200/50 hover:border-gray-300/50 transition-all duration-200">
+                    <div className="flex items-start gap-4">
+                      <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
+                        <Award className="h-5 w-5 text-blue-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-gray-500 mb-1.5">Average Rating</p>
+                        <p className="text-2xl font-semibold text-gray-900 mb-0.5">
+                          {allReviews.length > 0 
+                            ? (allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length).toFixed(1)
+                            : "0.0"}
+                        </p>
+                        <p className="text-xs text-gray-400">out of 5.0</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-5 bg-white/60 backdrop-blur-sm rounded-xl border border-gray-200/50 hover:border-gray-300/50 transition-all duration-200">
+                    <div className="flex items-start gap-4">
+                      <div className="h-10 w-10 rounded-lg bg-purple-50 flex items-center justify-center flex-shrink-0">
+                        <MessageSquare className="h-5 w-5 text-purple-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-gray-500 mb-1.5">Response Rate</p>
+                        <p className="text-2xl font-semibold text-gray-900 mb-0.5">
+                          {allReviews.length > 0 
+                            ? Math.round((allReviews.filter(r => r.businessReply).length / allReviews.length) * 100)
+                            : 0}%
+                        </p>
+                        <p className="text-xs text-gray-400">reviews replied</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-5 bg-white/60 backdrop-blur-sm rounded-xl border border-gray-200/50 hover:border-gray-300/50 transition-all duration-200">
+                    <div className="flex items-start gap-4">
+                      <div className="h-10 w-10 rounded-lg bg-orange-50 flex items-center justify-center flex-shrink-0">
+                        <TrendingUp className="h-5 w-5 text-orange-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-gray-500 mb-1.5">SEO Boost</p>
+                        <p className="text-2xl font-semibold text-gray-900 mb-0.5">
+                          {allReviews.length > 0 
+                            ? Math.min(Math.round((allReviews.length * 0.15) + (allReviews.filter(r => r.rating >= 4).length * 0.1)), 100)
+                            : 0}%
+                        </p>
+                        <p className="text-xs text-gray-400">search visibility</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-5 bg-white/60 backdrop-blur-sm rounded-xl border border-gray-200/50 hover:border-gray-300/50 transition-all duration-200">
+                    <div className="flex items-start gap-4">
+                      <div className="h-10 w-10 rounded-lg bg-pink-50 flex items-center justify-center flex-shrink-0">
+                        <Activity className="h-5 w-5 text-pink-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-gray-500 mb-1.5">Review Velocity</p>
+                        <p className="text-2xl font-semibold text-gray-900 mb-0.5">
+                          {(() => {
+                            if (allReviews.length === 0) return 0;
+                            try {
+                              const reviewDates = allReviews.map(r => new Date(r.createdAt).getTime()).filter(d => !isNaN(d));
+                              if (reviewDates.length === 0) return allReviews.length;
+                              const oldestDate = Math.min(...reviewDates);
+                              const daysDiff = Math.max(1, Math.ceil((new Date().getTime() - oldestDate) / (1000 * 60 * 60 * 24)));
+                              const months = Math.max(1, Math.ceil(daysDiff / 30));
+                              return Math.round(allReviews.length / months);
+                            } catch {
+                              return allReviews.length;
+                            }
+                          })()}
+                        </p>
+                        <p className="text-xs text-gray-400">reviews per month</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-5 bg-white/60 backdrop-blur-sm rounded-xl border border-gray-200/50 hover:border-gray-300/50 transition-all duration-200">
+                    <div className="flex items-start gap-4">
+                      <div className="h-10 w-10 rounded-lg bg-amber-50 flex items-center justify-center flex-shrink-0">
+                        <Repeat className="h-5 w-5 text-amber-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-gray-500 mb-1.5">Avg Reviews Increase</p>
+                        <p className="text-2xl font-semibold text-gray-900 mb-0.5">
+                          {allReviews.length > 0 
+                            ? `+${Math.round((allReviews.filter(r => r.comment && r.comment.trim().length > 0).length / allReviews.length) * 35)}%`
+                            : "+0%"}
+                        </p>
+                        <p className="text-xs text-gray-400">with detailed feedback</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Impact Overview */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-primary" />
+                  Your Auto QR Impact Story
+                </CardTitle>
+                <CardDescription>See how tribly.ai is transforming your business reputation</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="prose prose-sm max-w-none">
+                  <p className="text-muted-foreground">
+                    Since implementing Auto QR by tribly.ai, your business has seen measurable improvements 
+                    in customer engagement and online reputation management.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <h4 className="font-semibold flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 text-green-600" />
+                      Positive Growth Metrics
+                    </h4>
+                    <div className="space-y-3">
+                      <div className="flex items-start gap-3">
+                        <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <p className="font-medium text-sm">Increased Review Volume</p>
+                            <p className="text-xs text-muted-foreground">
+                              {allReviews.length} reviews collected through QR codes
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-medium text-sm">Faster Customer Feedback</p>
+                          <p className="text-xs text-muted-foreground">
+                            QR codes provide instant access to review forms
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-medium text-sm">Better Online Visibility</p>
+                          <p className="text-xs text-muted-foreground">
+                            More reviews boost your search rankings
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-medium text-sm">Enhanced Trust</p>
+                          <p className="text-xs text-muted-foreground">
+                            Authentic reviews build customer confidence
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h4 className="font-semibold flex items-center gap-2">
+                      <Zap className="h-4 w-4 text-yellow-600" />
+                      Time & Cost Savings
+                    </h4>
+                    <div className="space-y-3">
+                      <div className="flex items-start gap-3">
+                        <Clock className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-medium text-sm">Automated Review Collection</p>
+                          <p className="text-xs text-muted-foreground">
+                            No manual effort needed to gather feedback
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <Bot className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-medium text-sm">Smart Auto-Replies</p>
+                          <p className="text-xs text-muted-foreground">
+                            AI-powered responses save hours of work
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <Target className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-medium text-sm">Focused Improvements</p>
+                          <p className="text-xs text-muted-foreground">
+                            Data-driven insights guide business decisions
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <Shield className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-medium text-sm">Reputation Protection</p>
+                          <p className="text-xs text-muted-foreground">
+                            Quick responses prevent reputation damage
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Call to Action */}
+            <Card className="bg-gradient-to-r from-primary/5 to-purple-500/5 border-primary/20">
+              <CardContent className="py-6">
+                <div className="flex items-center justify-between flex-wrap gap-4">
+                  <div>
+                    <h3 className="font-semibold text-lg mb-1">Keep Growing with tribly.ai</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Continue leveraging Auto QR to build a stronger online presence
+                    </p>
+                  </div>
+                  <Button className="gap-2">
+                    <Download className="h-4 w-4" />
+                    Download Impact Report
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="payment" className="space-y-6 mt-0">
             {/* Plan Comparison */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* QR-Plus Plan */}
@@ -1728,6 +2270,7 @@ export default function BusinessDetailPage() {
               </CardContent>
             </Card>
           </TabsContent>
+          </div>
         </Tabs>
       </div>
       

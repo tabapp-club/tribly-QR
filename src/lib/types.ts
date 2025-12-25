@@ -44,6 +44,7 @@ export interface Business {
   paymentPlan?: "qr-basic" | "qr-plus";
   paymentStatus?: "active" | "past-due" | "cancelled";
   paymentExpiryDate?: string; // ISO date string for plan expiry
+  billingDate?: string; // ISO date string for billing date
   // Sales Team
   salesTeamId?: string; // ID of the sales team member who onboarded this business
   // SEO

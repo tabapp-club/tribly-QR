@@ -135,7 +135,7 @@ export function getSalesTeam(): User[] {
       role: "sales-team",
       phone: "+91 98765 43210",
       createdAt: new Date().toISOString(),
-      salesPersonId: "tribly0001",
+      salesPersonId: "tribe" + String(Math.floor(Math.random() * 10000)).padStart(4, '0'),
     },
   ];
   setSalesTeam(defaultSalesTeam);
@@ -149,15 +149,27 @@ export function setSalesTeam(team: User[]): void {
 
 export function addSalesTeamMember(member: Omit<User, "id" | "createdAt" | "salesPersonId">): User {
   const team = getSalesTeam();
-  // Generate unique salesPersonId (triblyXXXX format)
+  // Generate unique salesPersonId (tribeXXXX format with random numbers)
   const existingIds = team
     .filter(m => m.salesPersonId)
-    .map(m => {
-      const match = m.salesPersonId?.match(/tribly(\d+)/);
-      return match ? parseInt(match[1]) : 0;
-    });
-  const nextId = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1;
-  const salesPersonId = `tribly${String(nextId).padStart(4, '0')}`;
+    .map(m => m.salesPersonId || "");
+  
+  let salesPersonId: string;
+  let attempts = 0;
+  const maxAttempts = 100; // Prevent infinite loop
+  
+  // Generate random ID and ensure it's unique
+  do {
+    const randomNum = Math.floor(Math.random() * 10000);
+    salesPersonId = `tribe${String(randomNum).padStart(4, '0')}`;
+    attempts++;
+  } while (existingIds.includes(salesPersonId) && attempts < maxAttempts);
+  
+  // Fallback to timestamp-based if all random attempts fail (very unlikely)
+  if (attempts >= maxAttempts) {
+    const timestamp = Date.now().toString().slice(-4);
+    salesPersonId = `tribe${timestamp}`;
+  }
   
   const newMember: User = {
     ...member,

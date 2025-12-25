@@ -37,7 +37,7 @@ export default function DashboardPage() {
   const [cityFilter, setCityFilter] = useState<string>("all");
   const [areaFilter, setAreaFilter] = useState<string>("all");
   const [onboardedByFilter, setOnboardedByFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<BusinessStatus | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<BusinessStatus | "due-date" | "pending" | "all">("all");
   const [user, setUser] = useState(getStoredUser());
 
   useEffect(() => {
@@ -167,7 +167,55 @@ export default function DashboardPage() {
 
     // Apply status filter
     if (statusFilter !== "all") {
-      filtered = filtered.filter((business) => business.status === statusFilter);
+      if (statusFilter === "due-date") {
+        // Due date: 60 days before paymentExpiryDate
+        const today = new Date();
+        const sixtyDaysFromNow = new Date(today);
+        sixtyDaysFromNow.setDate(today.getDate() + 60);
+        
+        filtered = filtered.filter((business) => {
+          if (!business.paymentExpiryDate) return false;
+          const expiryDate = new Date(business.paymentExpiryDate);
+          // Check if expiry date is within 60 days from today
+          return expiryDate <= sixtyDaysFromNow && expiryDate >= today;
+        });
+      } else if (statusFilter === "pending") {
+        // Payment pending: after 1 day of billing date
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const oneDayAgo = new Date(today);
+        oneDayAgo.setDate(today.getDate() - 1);
+        
+        filtered = filtered.filter((business) => {
+          if (!business.billingDate) return false;
+          const billingDate = new Date(business.billingDate);
+          billingDate.setHours(0, 0, 0, 0);
+          // Check if billing date was more than 1 day ago and payment is not completed
+          return billingDate <= oneDayAgo && business.paymentStatus !== "active";
+        });
+      } else if (statusFilter === "inactive") {
+        // Inactive: manual status updates OR payment pending more than 30 days
+        const today = new Date();
+        const thirtyDaysAgo = new Date(today);
+        thirtyDaysAgo.setDate(today.getDate() - 30);
+        
+        filtered = filtered.filter((business) => {
+          // Manual status update (status is explicitly inactive)
+          if (business.status === "inactive") {
+            return true;
+          }
+          // Check if payment pending more than 30 days (even if status is active)
+          if (business.billingDate) {
+            const billingDate = new Date(business.billingDate);
+            billingDate.setHours(0, 0, 0, 0);
+            return billingDate <= thirtyDaysAgo && business.paymentStatus !== "active";
+          }
+          return false;
+        });
+      } else {
+        // Standard status filter (active/inactive)
+        filtered = filtered.filter((business) => business.status === statusFilter);
+      }
     }
 
     return filtered;
@@ -322,7 +370,7 @@ export default function DashboardPage() {
               {/* Status Filter */}
               <div className="space-y-2">
                 <Label htmlFor="status-filter">Status</Label>
-                <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as BusinessStatus | "all")}>
+                <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as BusinessStatus | "due-date" | "pending" | "all")}>
                   <SelectTrigger id="status-filter">
                     <SelectValue placeholder="All Status" />
                   </SelectTrigger>
@@ -330,6 +378,12 @@ export default function DashboardPage() {
                     <SelectItem value="all">All Status</SelectItem>
                     <SelectItem value="active">Active</SelectItem>
                     <SelectItem value="inactive">Inactive</SelectItem>
+                    {user?.role === "admin" && (
+                      <>
+                        <SelectItem value="due-date">Due Date</SelectItem>
+                        <SelectItem value="pending">Pending</SelectItem>
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
