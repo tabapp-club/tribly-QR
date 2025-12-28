@@ -14,10 +14,10 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { mockBusinesses, getReviewsByBusinessId } from "@/lib/mock-data";
-import { Business, BusinessCategory, ReviewCategory } from "@/lib/types";
+import { Business, BusinessCategory, ReviewCategory, Review } from "@/lib/types";
 import { generateShortUrlCode, generateReviewUrl, generateQRCodeDataUrl, downloadQRCodeAsPNG } from "@/lib/qr-utils";
 import { getBusinessBySlug } from "@/lib/business-slug";
-import { getStoredUser, logout, setStoredUser } from "@/lib/auth";
+import { getStoredUser, logout, setStoredUser, getAuthToken } from "@/lib/auth";
 import { Toast } from "@/components/ui/toast";
 import {
   ArrowLeft,
@@ -44,6 +44,7 @@ import {
   Star,
   Check,
   User,
+  Users,
   Mail,
   Phone,
   Calendar,
@@ -65,6 +66,8 @@ import {
   FileImage,
   CheckCircle,
   AlertTriangle,
+  Trash2,
+  Pencil,
 } from "lucide-react";
 
 export default function BusinessDetailPage() {
@@ -88,50 +91,146 @@ export default function BusinessDetailPage() {
   const [paymentQRCode, setPaymentQRCode] = useState<string | null>(null);
   const [paymentTimer, setPaymentTimer] = useState(900); // 15 minutes in seconds
   const [paymentSessionId, setPaymentSessionId] = useState<string | null>(null);
+  const [website, setWebsite] = useState<string>("");
+  const [isQRId, setIsQRId] = useState(false);
+  const [apiReviews, setApiReviews] = useState<Review[]>([]);
+  const [isLoadingReviews, setIsLoadingReviews] = useState(false);
+  // Team Management state
+  const [teamUsers, setTeamUsers] = useState<Array<{ id: string; email: string; name?: string; created_at: string }>>([]);
+  const [isLoadingTeamUsers, setIsLoadingTeamUsers] = useState(false);
+  const [newUserEmail, setNewUserEmail] = useState("");
+  const [newUserName, setNewUserName] = useState("");
+  const [newUserPassword, setNewUserPassword] = useState("");
+  const [isAddingUser, setIsAddingUser] = useState(false);
+  // Update user state
+  const [showUpdateDialog, setShowUpdateDialog] = useState(false);
+  const [editingUser, setEditingUser] = useState<{ id: string; email: string; name?: string } | null>(null);
+  const [updateUserName, setUpdateUserName] = useState("");
+  const [updateUserEmail, setUpdateUserEmail] = useState("");
+  const [updateUserPassword, setUpdateUserPassword] = useState("");
+  const [isUpdatingUser, setIsUpdatingUser] = useState(false);
 
   useEffect(() => {
-    // Try to find business by slug first, fallback to ID for backward compatibility
-    let businessData = getBusinessBySlug(businessSlug, mockBusinesses);
-    
-    // If not found by slug, try as ID (for backward compatibility)
-    if (!businessData) {
-      businessData = mockBusinesses.find(b => b.id === businessSlug) || undefined;
-    }
-    
-    if (businessData) {
-      setBusiness(businessData);
-      
-      // Check if logged-in user is the business owner
-      const user = getStoredUser();
-      if (user && user.role === "business" && user.businessId === businessData.id) {
-        setIsBusinessOwner(true);
+    const loadBusinessData = async () => {
+      // First, try to find business by slug (existing businesses)
+      let businessData = getBusinessBySlug(businessSlug, mockBusinesses);
+
+      // If not found by slug, try as ID (for backward compatibility)
+      if (!businessData) {
+        businessData = mockBusinesses.find(b => b.id === businessSlug) || undefined;
       }
-      setCurrentUser(user);
-      
-      // Generate unique review URL and QR code
-      const code = generateShortUrlCode(businessData.id);
-      const url = generateReviewUrl(code);
-      setReviewUrl(url);
-      
-      // Generate QR code
-      generateQRCodeDataUrl(url).then((dataUrl) => {
-        setQrCodeDataUrl(dataUrl);
-        // Update business with review URL and QR code
-        setBusiness((prev) => prev ? { ...prev, reviewUrl: url, qrCodeUrl: dataUrl } : null);
-      }).catch((error) => {
-        console.error("Error generating QR code:", error);
-      });
-    } else {
-      // Business not found, redirect based on user role
-      const user = getStoredUser();
-      if (user && user.role === "business") {
-        // Business owner trying to access non-existent business, redirect to login
-        router.push("/login");
+
+      // If still not found, treat it as a QR ID and fetch from API
+      if (!businessData) {
+        setIsQRId(true);
+        try {
+          const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.tribly.ai";
+          const response = await fetch(`${apiBaseUrl}/dashboard/v1/business_qr/scan?qr_id=${businessSlug}`);
+
+          if (!response.ok) {
+            console.error("Failed to fetch business QR data");
+            setIsLoading(false);
+            return;
+          }
+
+          const apiResponse = await response.json();
+          const qrData = apiResponse.data;
+
+          // Map API response to Business type
+          const mappedBusiness: Business = {
+            id: businessSlug,
+            name: qrData.business_name || "",
+            status: "active",
+            category: (qrData.business_category as BusinessCategory) || "other",
+            email: qrData.business_contact?.email || "",
+            phone: qrData.business_contact?.phone || "",
+            address: qrData.business_address?.address_line1 || "",
+            city: qrData.business_address?.city || "",
+            area: qrData.business_address?.area || "",
+            overview: qrData.business_description || "",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            reviewUrl: qrData.business_review_url || "",
+            googleBusinessReviewLink: qrData.business_google_review_url || "",
+            keywords: Array.isArray(qrData.business_tags) ? qrData.business_tags : [],
+            feedbackTone: "professional",
+            autoReplyEnabled: false,
+            totalReviews: 0,
+            activeReviews: 0,
+            inactiveReviews: 0,
+            reviewsInQueue: 0,
+          };
+
+          setBusiness(mappedBusiness);
+          setWebsite(qrData.business_website || "");
+          setReviewUrl(qrData.business_review_url || "");
+
+          // Use business_qr_code_url from API if available, otherwise generate QR code
+          if (qrData.business_qr_code_url) {
+            setQrCodeDataUrl(qrData.business_qr_code_url);
+            setBusiness((prev) => prev ? { ...prev, qrCodeUrl: qrData.business_qr_code_url } : null);
+          } else if (qrData.business_review_url) {
+            // Fallback: Generate QR code if review URL exists but no QR code URL provided
+            generateQRCodeDataUrl(qrData.business_review_url).then((dataUrl) => {
+              setQrCodeDataUrl(dataUrl);
+              setBusiness((prev) => prev ? { ...prev, qrCodeUrl: dataUrl } : null);
+            }).catch((error) => {
+              console.error("Error generating QR code:", error);
+            });
+          }
+
+          const user = getStoredUser();
+          setCurrentUser(user);
+          setIsLoading(false);
+
+          // Fetch manual reviews from API
+          await fetchManualReviews(businessSlug);
+          return;
+        } catch (error) {
+          console.error("Error fetching business QR data:", error);
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // Existing business logic
+      if (businessData) {
+        setBusiness(businessData);
+
+        // Check if logged-in user is the business owner
+        const user = getStoredUser();
+        if (user && user.role === "business" && user.businessId === businessData.id) {
+          setIsBusinessOwner(true);
+        }
+        setCurrentUser(user);
+
+        // Generate unique review URL and QR code
+        const code = generateShortUrlCode(businessData.id);
+        const url = generateReviewUrl(code);
+        setReviewUrl(url);
+
+        // Generate QR code
+        generateQRCodeDataUrl(url).then((dataUrl) => {
+          setQrCodeDataUrl(dataUrl);
+          // Update business with review URL and QR code
+          setBusiness((prev) => prev ? { ...prev, reviewUrl: url, qrCodeUrl: dataUrl } : null);
+        }).catch((error) => {
+          console.error("Error generating QR code:", error);
+        });
       } else {
-      router.push("/dashboard");
+        // Business not found, redirect based on user role
+        const user = getStoredUser();
+        if (user && user.role === "business") {
+          // Business owner trying to access non-existent business, redirect to login
+          router.push("/login");
+        } else {
+        router.push("/dashboard");
+        }
       }
-    }
-    setIsLoading(false);
+      setIsLoading(false);
+    };
+
+    loadBusinessData();
   }, [businessSlug, router]);
 
   // Reset suggestions limit when business or keywords change
@@ -184,6 +283,18 @@ export default function BusinessDetailPage() {
     }
   }, [showPaymentDialog, paymentStatus, paymentSessionId]);
 
+  // Fetch team users when team management tab is active
+  useEffect(() => {
+    if (
+      activeTab === "team-management" &&
+      currentUser &&
+      (currentUser.role === "admin" || currentUser.userType === "admin") &&
+      business
+    ) {
+      fetchTeamUsers();
+    }
+  }, [activeTab, currentUser, business]);
+
   // Generate payment QR code when dialog opens
   useEffect(() => {
     if (showPaymentDialog && business && !paymentQRCode) {
@@ -193,11 +304,11 @@ export default function BusinessDetailPage() {
           const planName = business.paymentPlan === "qr-plus" ? "QR-Plus" : "QR-Basic";
           const sessionId = `payment-${business.id}-${Date.now()}`;
           setPaymentSessionId(sessionId);
-          
+
           // Generate UPI payment URL (format: upi://pay?pa=merchant@upi&pn=MerchantName&am=Amount&cu=INR&tn=TransactionNote)
           // For demo, we'll use a generic payment URL
           const paymentUrl = `upi://pay?pa=tribly@pay&pn=Tribly%20QR&am=${planPrice}&cu=INR&tn=${planName}%20Subscription%20-%20${business.name}`;
-          
+
           const qrCode = await generateQRCodeDataUrl(paymentUrl);
           setPaymentQRCode(qrCode);
           setPaymentStatus("pending");
@@ -224,11 +335,75 @@ export default function BusinessDetailPage() {
     }
   }, [showPaymentDialog, paymentStatus]);
 
+  // Fetch manual reviews from API
+  const fetchManualReviews = async (qrId: string) => {
+    setIsLoadingReviews(true);
+    try {
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.tribly.ai";
+
+      // Get auth token
+      const authToken = getAuthToken();
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+      };
+
+      // Add auth token to headers if available
+      if (authToken) {
+        headers["Authorization"] = `Bearer ${authToken}`;
+      }
+
+      const response = await fetch(`${apiBaseUrl}/dashboard/v1/business_qr/manual_reviews?qr_id=${qrId}`, {
+        headers,
+      });
+
+      if (!response.ok) {
+        console.error("Failed to fetch manual reviews");
+        setIsLoadingReviews(false);
+        return;
+      }
+
+      const apiResponse = await response.json();
+      // API returns array directly or wrapped in data property
+      const reviewsData = Array.isArray(apiResponse) ? apiResponse : (apiResponse.data || apiResponse.reviews || []);
+
+      // Map API response to Review type
+      const mappedReviews: Review[] = reviewsData.map((review: any, index: number) => {
+        // Parse contact - could be email or phone
+        const contact = review.contact || "";
+        const isEmail = contact.includes("@");
+
+        return {
+          id: `api-review-${index}-${review.created_at || Date.now()}`,
+          businessId: qrId,
+          rating: "need-improvement" as const, // Manual reviews are from "Need Improvement" rating
+          feedback: review.feedback || "",
+          category: "customer-experience" as ReviewCategory, // Default category
+          customerName: review.name || "",
+          customerEmail: isEmail ? contact : undefined,
+          customerPhone: !isEmail ? contact : undefined,
+          status: "pending" as const,
+          autoReplySent: false,
+          createdAt: review.created_at || new Date().toISOString(),
+        };
+      });
+
+      setApiReviews(mappedReviews);
+    } catch (error) {
+      console.error("Error fetching manual reviews:", error);
+    } finally {
+      setIsLoadingReviews(false);
+    }
+  };
+
   // Get all reviews for the business
   const allReviews = useMemo(() => {
     if (!business) return [];
+    // If it's a QR ID, use API reviews (even if empty), otherwise use mock reviews
+    if (isQRId) {
+      return apiReviews;
+    }
     return getReviewsByBusinessId(business.id);
-  }, [business]);
+  }, [business, isQRId, apiReviews]);
 
   // Filter reviews based on selected category
   const filteredReviews = useMemo(() => {
@@ -246,56 +421,180 @@ export default function BusinessDetailPage() {
   const handleUpdateBusiness = (updates: Partial<Business>) => {
     if (business) {
       setBusiness({ ...business, ...updates });
-      // In a real app, this would make an API call
-      console.log("Updating business:", updates);
     }
   };
 
-  const handleAddKeyword = () => {
+  // Helper function to convert rating string to number
+  const ratingToNumber = (rating: "excellent" | "good" | "average" | "need-improvement"): number => {
+    switch (rating) {
+      case "excellent":
+        return 5;
+      case "good":
+        return 4;
+      case "average":
+        return 3;
+      case "need-improvement":
+        return 2;
+      default:
+        return 0;
+    }
+  };
+
+  // Fetch team users for the business
+  const fetchTeamUsers = async () => {
+    if (!currentUser || (currentUser.role !== "admin" && currentUser.userType !== "admin")) {
+      return;
+    }
+
+    setIsLoadingTeamUsers(true);
+    try {
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.tribly.ai";
+      const authToken = getAuthToken();
+
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+      };
+
+      if (authToken) {
+        headers["Authorization"] = `Bearer ${authToken}`;
+      }
+
+      const response = await fetch(
+        `${apiBaseUrl}/dashboard/v1/business_qr/business_team?qr_id=${businessSlug}`,
+        {
+          method: "GET",
+          headers,
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to fetch team users");
+      }
+
+      const data = await response.json();
+      if (data.status === "success" && data.data) {
+        setTeamUsers(data.data);
+      } else {
+        setTeamUsers([]);
+      }
+    } catch (error) {
+      console.error("Error fetching team users:", error);
+      setTeamUsers([]);
+    } finally {
+      setIsLoadingTeamUsers(false);
+    }
+  };
+
+  const sendKeywordsToAPI = async (keywords: string[]) => {
+    if (!isQRId || !business) return;
+
+    try {
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.tribly.ai";
+
+      // Prepare payload with tags as array of strings
+      const payload: any = {
+        name: business.name,
+        description: business.overview || null,
+        website: website || null,
+        email: business.email || null,
+        phone: business.phone || null,
+        category: business.category || null,
+        google_review_url: business.googleBusinessReviewLink || null,
+        qr_id: businessSlug,
+        tags: keywords, // Send keywords as tags array
+      };
+
+      // Only include address if address_line1 is provided (required field)
+      if (business.address) {
+        payload.address = {
+          address_line1: business.address,
+          address_line2: null,
+          city: business.city || "",
+          area: business.area || "",
+        };
+      }
+
+      // Get auth token
+      const authToken = getAuthToken();
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+      };
+
+      // Add auth token to headers if available
+      if (authToken) {
+        headers["Authorization"] = `Bearer ${authToken}`;
+      }
+
+      const response = await fetch(`${apiBaseUrl}/dashboard/v1/business_qr/configure_qr`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to save keywords");
+      }
+    } catch (error) {
+      console.error("Error sending keywords to API:", error);
+      // Don't show error toast on every keyword add/remove to avoid spam
+    }
+  };
+
+  const handleAddKeyword = async () => {
     if (newKeyword.trim() && business) {
       const trimmedKeyword = newKeyword.trim();
       const currentKeywords = business.keywords || [];
-      
+
       // Check if keyword already exists (case-insensitive)
       if (currentKeywords.some(k => k.toLowerCase() === trimmedKeyword.toLowerCase())) {
         setToastMessage("Keyword already exists");
         setShowToast(true);
         return;
       }
-      
+
+      const updatedKeywords = [...currentKeywords, trimmedKeyword];
       handleUpdateBusiness({
-        keywords: [...currentKeywords, trimmedKeyword]
+        keywords: updatedKeywords
       });
       setNewKeyword("");
+
+      // Send keywords to API
+      await sendKeywordsToAPI(updatedKeywords);
     }
   };
 
-  const handleRemoveKeyword = (keywordToRemove: string) => {
+  const handleRemoveKeyword = async (keywordToRemove: string) => {
     if (business && business.keywords) {
+      const updatedKeywords = business.keywords.filter(k => k !== keywordToRemove);
       handleUpdateBusiness({
-        keywords: business.keywords.filter(k => k !== keywordToRemove)
+        keywords: updatedKeywords
       });
+
+      // Send updated keywords to API
+      await sendKeywordsToAPI(updatedKeywords);
     }
   };
 
   // Generate SEO-optimized suggested keywords based on business category, location, and name
   const suggestedKeywords = useMemo(() => {
     if (!business) return [];
-    
+
     const suggestions: string[] = [];
     const currentKeywords = business.keywords || [];
-    
+
     // SEO-focused category-based keyword suggestions
     const categoryKeywords: Record<string, string[]> = {
       restaurant: [
-        "best restaurant", "top dining", "authentic cuisine", "fine dining", 
-        "family restaurant", "casual dining", "restaurant near me", 
+        "best restaurant", "top dining", "authentic cuisine", "fine dining",
+        "family restaurant", "casual dining", "restaurant near me",
         "local restaurant", "popular restaurant", "restaurant reviews",
         "delicious food", "fresh ingredients", "chef special", "menu items"
       ],
       retail: [
         "best shop", "top store", "quality products", "affordable prices",
-        "retail store near me", "local shop", "popular store", 
+        "retail store near me", "local shop", "popular store",
         "best deals", "shopping destination", "product reviews",
         "customer service", "wide selection", "premium quality"
       ],
@@ -341,17 +640,17 @@ export default function BusinessDetailPage() {
         "expert service", "reliable business", "quality work", "professional team"
       ]
     };
-    
+
     // Add category-based SEO keywords
     if (business.category && categoryKeywords[business.category]) {
       suggestions.push(...categoryKeywords[business.category]);
     }
-    
+
     // Add high-value location-based SEO keywords
     if (business.city) {
       const cityName = business.city;
       const categoryName = business.category.charAt(0).toUpperCase() + business.category.slice(1);
-      
+
       // Long-tail location keywords (high SEO value)
       suggestions.push(
         `best ${business.category} in ${cityName}`,
@@ -360,7 +659,7 @@ export default function BusinessDetailPage() {
         `${categoryName} near ${cityName}`,
         `${business.category} ${cityName} reviews`
       );
-      
+
       if (business.area) {
         suggestions.push(
           `best ${business.category} ${business.area}`,
@@ -370,7 +669,7 @@ export default function BusinessDetailPage() {
         );
       }
     }
-    
+
     // Add business name-based SEO keywords
     const nameWords = business.name.toLowerCase().split(/\s+/);
     if (nameWords.length > 0) {
@@ -382,7 +681,7 @@ export default function BusinessDetailPage() {
         `${businessName} location`
       );
     }
-    
+
     // Add high-intent action keywords
     suggestions.push(
       "book now",
@@ -391,12 +690,12 @@ export default function BusinessDetailPage() {
       "visit us",
       "call today"
     );
-    
+
     // Filter out keywords that are already added (case-insensitive)
     const filtered = suggestions.filter(
       keyword => !currentKeywords.some(k => k.toLowerCase() === keyword.toLowerCase())
     );
-    
+
     // Return all filtered suggestions (will be limited in display)
     return filtered;
   }, [business]);
@@ -406,18 +705,74 @@ export default function BusinessDetailPage() {
     return suggestedKeywords.slice(0, suggestionsLimit);
   }, [suggestedKeywords, suggestionsLimit]);
 
-  const handleSaveChanges = (section: string) => {
-    // In a real app, this would make an API call to save changes
-    console.log(`Saving ${section}...`);
-    
-    // Show success toast
-    setToastMessage(`${section} saved successfully!`);
-    setShowToast(true);
-    
-    // Optional: Navigate back to dashboard after a delay
-    // setTimeout(() => {
-    //   router.push("/dashboard");
-    // }, 2000);
+  const handleSaveChanges = async (section: string) => {
+    if (!business) return;
+
+    // If it's a QR ID, save via API
+    if (isQRId) {
+      try {
+        const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.tribly.ai";
+
+        // Prepare payload according to API specification
+        const payload: any = {
+          name: business.name,
+          description: business.overview || null,
+          website: website || null,
+          email: business.email || null,
+          phone: business.phone || null,
+          category: business.category || null,
+          google_review_url: business.googleBusinessReviewLink || null,
+          qr_id: businessSlug,
+        };
+
+        // Include tags (keywords) when saving keywords section
+        if (section === "Keywords") {
+          payload.tags = business.keywords || [];
+        }
+
+        // Only include address if address_line1 is provided (required field)
+        if (business.address) {
+          payload.address = {
+            address_line1: business.address,
+            address_line2: null,
+            city: business.city || "",
+            area: business.area || "",
+          };
+        }
+
+        // Get auth token
+        const authToken = getAuthToken();
+        const headers: HeadersInit = {
+          "Content-Type": "application/json",
+        };
+
+        // Add auth token to headers if available
+        if (authToken) {
+          headers["Authorization"] = `Bearer ${authToken}`;
+        }
+
+        const response = await fetch(`${apiBaseUrl}/dashboard/v1/business_qr/configure_qr`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || "Failed to save business QR configuration");
+        }
+
+        setToastMessage(`${section} saved successfully!`);
+        setShowToast(true);
+      } catch (error) {
+        console.error("Error saving business QR configuration:", error);
+        setToastMessage(error instanceof Error ? error.message : "Failed to save changes");
+        setShowToast(true);
+      }
+    } else {
+      setToastMessage(`${section} saved successfully!`);
+      setShowToast(true);
+    }
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -432,15 +787,72 @@ export default function BusinessDetailPage() {
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    // You can add a toast notification here
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setToastMessage("Copied to clipboard!");
+      setShowToast(true);
+    } catch (err) {
+      console.error("Failed to copy text:", err);
+      // Fallback for older browsers
+      try {
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        textArea.style.top = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        const successful = document.execCommand("copy");
+        document.body.removeChild(textArea);
+        if (successful) {
+          setToastMessage("Copied to clipboard!");
+          setShowToast(true);
+        } else {
+          setToastMessage("Failed to copy to clipboard");
+          setShowToast(true);
+        }
+      } catch (fallbackErr) {
+        console.error("Fallback copy failed:", fallbackErr);
+        setToastMessage("Failed to copy to clipboard");
+        setShowToast(true);
+      }
+    }
   };
 
-  const handleDownloadQR = () => {
+  const handleDownloadQR = async () => {
     if (qrCodeDataUrl && business) {
       const filename = `${business.name.replace(/\s+/g, "-").toLowerCase()}-qr-code.png`;
-      downloadQRCodeAsPNG(qrCodeDataUrl, filename);
+
+      // If it's a data URL, use it directly
+      if (qrCodeDataUrl.startsWith("data:")) {
+        downloadQRCodeAsPNG(qrCodeDataUrl, filename);
+      } else {
+        // If it's a regular URL, fetch it and convert to blob for download
+        try {
+          const response = await fetch(qrCodeDataUrl);
+          const blob = await response.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.download = filename;
+          link.href = blobUrl;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(blobUrl);
+        } catch (error) {
+          console.error("Error downloading QR code:", error);
+          // Fallback: try direct download
+          const link = document.createElement("a");
+          link.download = filename;
+          link.href = qrCodeDataUrl;
+          link.target = "_blank";
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
+      }
     }
   };
 
@@ -461,7 +873,9 @@ export default function BusinessDetailPage() {
             <CardDescription>The business you're looking for doesn't exist.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button onClick={() => router.push("/dashboard")}>Back to Dashboard</Button>
+            {currentUser?.userType !== "business_qr_user" && (
+              <Button onClick={() => router.push("/dashboard")}>Back to Dashboard</Button>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -498,7 +912,7 @@ export default function BusinessDetailPage() {
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         {/* Header */}
         <div className="mb-6">
-          {!isBusinessOwner && (
+          {!isBusinessOwner && currentUser?.userType !== "business_qr_user" && (
           <Button
             variant="ghost"
             onClick={() => router.push("/dashboard")}
@@ -531,7 +945,7 @@ export default function BusinessDetailPage() {
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col lg:flex-row gap-6">
           <TabsList className="flex flex-col lg:w-64 w-full bg-white/80 backdrop-blur-sm border border-purple-100 p-2 rounded-lg shadow-sm h-fit space-y-1">
-            <TabsTrigger 
+            <TabsTrigger
               value="overview"
               className="w-full justify-start data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all py-3 h-auto"
             >
@@ -543,7 +957,7 @@ export default function BusinessDetailPage() {
                 </div>
               </div>
             </TabsTrigger>
-            <TabsTrigger 
+            {/* <TabsTrigger
               value="gmb-health"
               className="w-full justify-start data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all py-3 h-auto"
             >
@@ -554,8 +968,8 @@ export default function BusinessDetailPage() {
                   <span className="text-xs opacity-70">Profile performance</span>
                 </div>
               </div>
-            </TabsTrigger>
-            <TabsTrigger 
+            </TabsTrigger> */}
+            <TabsTrigger
               value="keywords"
               className="w-full justify-start data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all py-3 h-auto"
             >
@@ -567,7 +981,7 @@ export default function BusinessDetailPage() {
                 </div>
               </div>
             </TabsTrigger>
-            <TabsTrigger 
+            <TabsTrigger
               value="links"
               className="w-full justify-start data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all py-3 h-auto"
             >
@@ -579,7 +993,7 @@ export default function BusinessDetailPage() {
                 </div>
               </div>
             </TabsTrigger>
-            <TabsTrigger 
+            <TabsTrigger
               value="auto-reply"
               className="w-full justify-start data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all py-3 h-auto"
             >
@@ -591,7 +1005,7 @@ export default function BusinessDetailPage() {
                 </div>
               </div>
             </TabsTrigger>
-            <TabsTrigger 
+            <TabsTrigger
               value="reviews"
               className="w-full justify-start data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all py-3 h-auto"
             >
@@ -603,7 +1017,7 @@ export default function BusinessDetailPage() {
                 </div>
               </div>
             </TabsTrigger>
-            <TabsTrigger 
+            <TabsTrigger
               value="auto-qr-impact"
               className="w-full justify-start data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all py-3 h-auto"
             >
@@ -615,7 +1029,7 @@ export default function BusinessDetailPage() {
                 </div>
               </div>
             </TabsTrigger>
-            <TabsTrigger 
+            <TabsTrigger
               value="payment"
               className="w-full justify-start data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all py-3 h-auto"
             >
@@ -627,6 +1041,20 @@ export default function BusinessDetailPage() {
                 </div>
               </div>
             </TabsTrigger>
+            {currentUser && (currentUser.role === "admin" || currentUser.userType === "admin") && (
+              <TabsTrigger
+                value="team-management"
+                className="w-full justify-start data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all py-3 h-auto"
+              >
+                <div className="flex items-start gap-3 w-full">
+                  <Users className="h-5 w-5 mt-0.5 flex-shrink-0" />
+                  <div className="flex flex-col items-start gap-0.5 flex-1">
+                    <span className="font-medium">Team Management</span>
+                    <span className="text-xs opacity-70">Manage team users</span>
+                  </div>
+                </div>
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <div className="flex-1 min-w-0">
@@ -672,6 +1100,15 @@ export default function BusinessDetailPage() {
                       value={business.phone || ""}
                       onChange={(e) => handleUpdateBusiness({ phone: e.target.value })}
                       placeholder="+1 (555) 123-4567"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Website</Label>
+                    <Input
+                      type="url"
+                      value={website}
+                      onChange={(e) => setWebsite(e.target.value)}
+                      placeholder="https://www.example.com"
                     />
                   </div>
                   <div className="space-y-2">
@@ -723,7 +1160,7 @@ export default function BusinessDetailPage() {
                   </div>
                 </div>
                 <div className="flex justify-end">
-                  <Button 
+                  <Button
                     onClick={() => handleSaveChanges("Business information")}
                     className="gap-2"
                   >
@@ -1388,16 +1825,19 @@ export default function BusinessDetailPage() {
                             key={index}
                             variant="outline"
                             className="cursor-pointer hover:bg-primary/10 hover:border-primary transition-colors px-3 py-1.5"
-                            onClick={() => {
+                            onClick={async () => {
                               setNewKeyword(keyword);
                               // Auto-add on click
                               const trimmedKeyword = keyword.trim();
                               if (business) {
                                 const currentKeywords = business.keywords || [];
                                 if (!currentKeywords.some(k => k.toLowerCase() === trimmedKeyword.toLowerCase())) {
+                                  const updatedKeywords = [...currentKeywords, trimmedKeyword];
                                   handleUpdateBusiness({
-                                    keywords: [...currentKeywords, trimmedKeyword]
+                                    keywords: updatedKeywords
                                   });
+                                  // Send keywords to API
+                                  await sendKeywordsToAPI(updatedKeywords);
                                 }
                               }
                             }}
@@ -1417,7 +1857,7 @@ export default function BusinessDetailPage() {
 
                 <div className="pt-4 border-t">
                   <div className="flex justify-end">
-                    <Button 
+                    <Button
                       onClick={() => handleSaveChanges("Keywords")}
                       className="gap-2"
                     >
@@ -1432,13 +1872,13 @@ export default function BusinessDetailPage() {
 
           {/* Links & QR Tab */}
           <TabsContent value="links" className="space-y-6 mt-0">
-            <Card>
-              <CardHeader>
-                <CardTitle>QR Code</CardTitle>
-                <CardDescription>Dynamic QR code for your business review page</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {qrCodeDataUrl ? (
+            {qrCodeDataUrl && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>QR Code</CardTitle>
+                  <CardDescription>Dynamic QR code for your business review page</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
                   <div className="space-y-4">
                     <div className="flex items-center justify-center p-8 border rounded-lg bg-white">
                       <img
@@ -1461,16 +1901,9 @@ export default function BusinessDetailPage() {
                       This QR code links to your unique review page. Scan it to leave a review.
                     </p>
                   </div>
-                ) : (
-                  <div className="flex items-center justify-center p-8 border-2 border-dashed rounded-lg">
-                    <div className="text-center">
-                      <ImageIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                      <p className="text-sm text-muted-foreground">Generating QR code...</p>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            )}
 
             <Card>
               <CardHeader>
@@ -1579,7 +2012,7 @@ export default function BusinessDetailPage() {
                   </p>
                 </div>
                 <div className="flex justify-end">
-                  <Button 
+                  <Button
                     onClick={() => handleSaveChanges("Business links")}
                     className="gap-2"
                   >
@@ -1665,7 +2098,7 @@ export default function BusinessDetailPage() {
                 <Separator />
 
                 <div className="flex justify-end">
-                  <Button 
+                  <Button
                     onClick={() => handleSaveChanges("Auto-reply settings")}
                     className="gap-2"
                   >
@@ -1690,7 +2123,12 @@ export default function BusinessDetailPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {filteredReviews.length === 0 && allReviews.length === 0 ? (
+                {isLoadingReviews ? (
+                  <div className="text-center py-12">
+                    <Loader2 className="h-8 w-8 mx-auto mb-4 text-muted-foreground animate-spin" />
+                    <p className="text-muted-foreground">Loading reviews...</p>
+                  </div>
+                ) : filteredReviews.length === 0 && allReviews.length === 0 ? (
                     <div className="text-center py-12">
                       <MessageSquare className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
                       <p className="text-muted-foreground">No manual reviews yet</p>
@@ -1701,7 +2139,7 @@ export default function BusinessDetailPage() {
                   ) : (
                     <div className="space-y-4">
                       {/* Filter Buttons */}
-                      {allReviews.length > 0 && (
+                      {/* {allReviews.length > 0 && (
                         <div className="flex flex-wrap gap-2 pb-4 border-b">
                           {reviewFilters.map((filter) => {
                             const count = allReviews.filter((r) => r.category === filter.id).length;
@@ -1722,16 +2160,16 @@ export default function BusinessDetailPage() {
                             );
                           })}
                         </div>
-                      )}
+                      )} */}
 
                       {/* No results message when filter is active */}
-                      {selectedReviewFilter && filteredReviews.length === 0 && allReviews.length > 0 && (
+                      {/* {selectedReviewFilter && filteredReviews.length === 0 && allReviews.length > 0 && (
                         <div className="text-center py-8">
                           <p className="text-muted-foreground">
                             No reviews found for this filter. Try selecting a different category.
                           </p>
                         </div>
-                      )}
+                      )} */}
 
                       {/* Reviews List */}
                       {filteredReviews.length > 0 && (
@@ -1828,8 +2266,8 @@ export default function BusinessDetailPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-gray-500 mb-1.5">Average Rating</p>
                         <p className="text-2xl font-semibold text-gray-900 mb-0.5">
-                          {allReviews.length > 0 
-                            ? (allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length).toFixed(1)
+                          {allReviews.length > 0
+                            ? (allReviews.reduce((sum, r) => sum + ratingToNumber(r.rating), 0) / allReviews.length).toFixed(1)
                             : "0.0"}
                         </p>
                         <p className="text-xs text-gray-400">out of 5.0</p>
@@ -1844,8 +2282,8 @@ export default function BusinessDetailPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-gray-500 mb-1.5">Response Rate</p>
                         <p className="text-2xl font-semibold text-gray-900 mb-0.5">
-                          {allReviews.length > 0 
-                            ? Math.round((allReviews.filter(r => r.businessReply).length / allReviews.length) * 100)
+                          {allReviews.length > 0
+                            ? Math.round((allReviews.filter(r => r.status === "responded").length / allReviews.length) * 100)
                             : 0}%
                         </p>
                         <p className="text-xs text-gray-400">reviews replied</p>
@@ -1860,8 +2298,8 @@ export default function BusinessDetailPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-gray-500 mb-1.5">SEO Boost</p>
                         <p className="text-2xl font-semibold text-gray-900 mb-0.5">
-                          {allReviews.length > 0 
-                            ? Math.min(Math.round((allReviews.length * 0.15) + (allReviews.filter(r => r.rating >= 4).length * 0.1)), 100)
+                          {allReviews.length > 0
+                            ? Math.min(Math.round((allReviews.length * 0.15) + (allReviews.filter(r => ratingToNumber(r.rating) >= 4).length * 0.1)), 100)
                             : 0}%
                         </p>
                         <p className="text-xs text-gray-400">search visibility</p>
@@ -1902,8 +2340,8 @@ export default function BusinessDetailPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-gray-500 mb-1.5">Avg Reviews Increase</p>
                         <p className="text-2xl font-semibold text-gray-900 mb-0.5">
-                          {allReviews.length > 0 
-                            ? `+${Math.round((allReviews.filter(r => r.comment && r.comment.trim().length > 0).length / allReviews.length) * 35)}%`
+                          {allReviews.length > 0
+                            ? `+${Math.round((allReviews.filter(r => r.feedback && r.feedback.trim().length > 0).length / allReviews.length) * 35)}%`
                             : "+0%"}
                         </p>
                         <p className="text-xs text-gray-400">with detailed feedback</p>
@@ -1926,7 +2364,7 @@ export default function BusinessDetailPage() {
               <CardContent className="space-y-6">
                 <div className="prose prose-sm max-w-none">
                   <p className="text-muted-foreground">
-                    Since implementing Auto QR by tribly.ai, your business has seen measurable improvements 
+                    Since implementing Auto QR by tribly.ai, your business has seen measurable improvements
                     in customer engagement and online reputation management.
                   </p>
                 </div>
@@ -2253,9 +2691,9 @@ export default function BusinessDetailPage() {
                       setShowPaymentDialog(true);
                     }}
                     disabled={
-                      !business.paymentPlan || 
-                      (business.paymentStatus === "active" && 
-                       business.paymentExpiryDate && 
+                      !business.paymentPlan ||
+                      !!(business.paymentStatus === "active" &&
+                       business.paymentExpiryDate &&
                        (() => {
                          const expiryDate = new Date(business.paymentExpiryDate);
                          const daysUntilExpiry = Math.ceil((expiryDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
@@ -2270,10 +2708,216 @@ export default function BusinessDetailPage() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* Team Management Tab - Only visible for admin */}
+          {currentUser && (currentUser.role === "admin" || currentUser.userType === "admin") && (
+            <TabsContent value="team-management" className="space-y-6 mt-0">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="h-5 w-5" />
+                    Team Management
+                  </CardTitle>
+                  <CardDescription>
+                    Create and manage users for this business account
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Add User Form */}
+                  <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
+                    <h3 className="font-semibold text-lg">Add New User</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="user-name">Name</Label>
+                        <Input
+                          id="user-name"
+                          type="text"
+                          placeholder="John Doe"
+                          value={newUserName}
+                          onChange={(e) => setNewUserName(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="user-email">Email</Label>
+                        <Input
+                          id="user-email"
+                          type="email"
+                          placeholder="user@example.com"
+                          value={newUserEmail}
+                          onChange={(e) => setNewUserEmail(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="user-password">Password</Label>
+                        <Input
+                          id="user-password"
+                          type="password"
+                          placeholder="Enter password"
+                          value={newUserPassword}
+                          onChange={(e) => setNewUserPassword(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <Button
+                      onClick={async () => {
+                        if (!newUserEmail || !newUserPassword) {
+                          setToastMessage("Please fill in both email and password");
+                          setShowToast(true);
+                          return;
+                        }
+
+                        setIsAddingUser(true);
+                        try {
+                          const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.tribly.ai";
+                          const authToken = getAuthToken();
+
+                          const headers: HeadersInit = {
+                            "Content-Type": "application/json",
+                          };
+
+                          if (authToken) {
+                            headers["Authorization"] = `Bearer ${authToken}`;
+                          }
+
+                          const response = await fetch(
+                            `${apiBaseUrl}/dashboard/v1/business_qr/business_team`,
+                            {
+                              method: "POST",
+                              headers,
+                              body: JSON.stringify({
+                                qr_id: businessSlug,
+                                name: newUserName || undefined,
+                                email: newUserEmail,
+                                password: newUserPassword,
+                              }),
+                            }
+                          );
+
+                          if (!response.ok) {
+                            const errorData = await response.json().catch(() => ({}));
+                            throw new Error(errorData.message || "Failed to create user");
+                          }
+
+                          const data = await response.json();
+                          if (data.status === "success") {
+                            setToastMessage("User created successfully");
+                            setShowToast(true);
+                            setNewUserName("");
+                            setNewUserEmail("");
+                            setNewUserPassword("");
+                            // Refresh team users list
+                            fetchTeamUsers();
+                          } else {
+                            throw new Error(data.message || "Failed to create user");
+                          }
+                        } catch (error) {
+                          console.error("Error creating user:", error);
+                          setToastMessage(
+                            error instanceof Error ? error.message : "Failed to create user"
+                          );
+                          setShowToast(true);
+                        } finally {
+                          setIsAddingUser(false);
+                        }
+                      }}
+                      disabled={isAddingUser || !newUserEmail || !newUserPassword}
+                      className="w-full md:w-auto"
+                    >
+                      {isAddingUser ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Adding...
+                        </>
+                      ) : (
+                        <>
+                          <PlusIcon className="h-4 w-4 mr-2" />
+                          Add User
+                        </>
+                      )}
+                    </Button>
+                  </div>
+
+                  {/* Team Users List */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold text-lg">Team Users ({teamUsers.length})</h3>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={fetchTeamUsers}
+                        disabled={isLoadingTeamUsers}
+                      >
+                        {isLoadingTeamUsers ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Repeat className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+
+                    {isLoadingTeamUsers ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <Loader2 className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                        <p>Loading team users...</p>
+                      </div>
+                    ) : teamUsers.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p>No team users found</p>
+                        <p className="text-sm">Add a user to get started</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {teamUsers.map((user) => (
+                          <div
+                            key={user.id}
+                            className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                                <User className="h-5 w-5 text-primary" />
+                              </div>
+                              <div>
+                                <p className="font-medium">{user.name || user.email}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {user.name && user.email !== user.name && (
+                                    <>
+                                      {user.email} •{" "}
+                                    </>
+                                  )}
+                                  Added {new Date(user.created_at).toLocaleDateString()}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setEditingUser(user);
+                                  setUpdateUserName(user.name || "");
+                                  setUpdateUserEmail(user.email);
+                                  setUpdateUserPassword("");
+                                  setShowUpdateDialog(true);
+                                }}
+                              >
+                                <Pencil className="h-4 w-4 mr-2" />
+                                Edit
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
           </div>
         </Tabs>
       </div>
-      
+
       {/* Toast Notification */}
       <Toast
         message={toastMessage}
@@ -2503,7 +3147,167 @@ export default function BusinessDetailPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Update User Dialog */}
+      <Dialog open={showUpdateDialog} onOpenChange={setShowUpdateDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Update Team User</DialogTitle>
+            <DialogDescription>
+              Update user details for {editingUser?.name || editingUser?.email}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="update-user-name">Name</Label>
+              <Input
+                id="update-user-name"
+                type="text"
+                placeholder="John Doe"
+                value={updateUserName}
+                onChange={(e) => setUpdateUserName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="update-user-email">Email</Label>
+              <Input
+                id="update-user-email"
+                type="email"
+                placeholder="user@example.com"
+                value={updateUserEmail}
+                onChange={(e) => setUpdateUserEmail(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="update-user-password">Password</Label>
+              <Input
+                id="update-user-password"
+                type="password"
+                placeholder="Leave blank to keep current password"
+                value={updateUserPassword}
+                onChange={(e) => setUpdateUserPassword(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Leave password blank if you don't want to change it
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowUpdateDialog(false);
+                  setEditingUser(null);
+                  setUpdateUserName("");
+                  setUpdateUserEmail("");
+                  setUpdateUserPassword("");
+                }}
+                disabled={isUpdatingUser}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={async () => {
+                  if (!editingUser) return;
+
+                  if (!updateUserEmail) {
+                    setToastMessage("Email is required");
+                    setShowToast(true);
+                    return;
+                  }
+
+                  setIsUpdatingUser(true);
+                  try {
+                    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.tribly.ai";
+                    const authToken = getAuthToken();
+
+                    const headers: HeadersInit = {
+                      "Content-Type": "application/json",
+                    };
+
+                    if (authToken) {
+                      headers["Authorization"] = `Bearer ${authToken}`;
+                    }
+
+                    // Build payload - only include fields that have changed
+                    const payload: {
+                      qr_id: string;
+                      user_id?: string;
+                      email: string;
+                      name?: string;
+                      password?: string;
+                    } = {
+                      qr_id: businessSlug,
+                      email: updateUserEmail,
+                    };
+
+                    // Include user_id if available (to identify which user to update)
+                    if (editingUser.id) {
+                      payload.user_id = editingUser.id;
+                    }
+
+                    // Include name if provided
+                    if (updateUserName) {
+                      payload.name = updateUserName;
+                    }
+
+                    // Include password only if provided (not empty)
+                    if (updateUserPassword && updateUserPassword.trim() !== "") {
+                      payload.password = updateUserPassword;
+                    }
+
+                    const response = await fetch(
+                      `${apiBaseUrl}/dashboard/v1/business_qr/business_team`,
+                      {
+                        method: "PATCH",
+                        headers,
+                        body: JSON.stringify(payload),
+                      }
+                    );
+
+                    if (!response.ok) {
+                      const errorData = await response.json().catch(() => ({}));
+                      throw new Error(errorData.message || "Failed to update user");
+                    }
+
+                    const data = await response.json();
+                    if (data.status === "success") {
+                      setToastMessage("User updated successfully");
+                      setShowToast(true);
+                      setShowUpdateDialog(false);
+                      setEditingUser(null);
+                      setUpdateUserName("");
+                      setUpdateUserEmail("");
+                      setUpdateUserPassword("");
+                      // Refresh team users list
+                      fetchTeamUsers();
+                    } else {
+                      throw new Error(data.message || "Failed to update user");
+                    }
+                  } catch (error) {
+                    console.error("Error updating user:", error);
+                    setToastMessage(
+                      error instanceof Error ? error.message : "Failed to update user"
+                    );
+                    setShowToast(true);
+                  } finally {
+                    setIsUpdatingUser(false);
+                  }
+                }}
+                disabled={isUpdatingUser || !updateUserEmail}
+              >
+                {isUpdatingUser ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  "Update User"
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
-

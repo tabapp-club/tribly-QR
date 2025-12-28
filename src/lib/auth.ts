@@ -14,6 +14,8 @@ export interface User {
   createdAt?: string;
   businessId?: string; // For business users, link to their business
   salesPersonId?: string; // Unique ID for sales team members
+  qrId?: string; // QR ID for business QR users
+  userType?: string; // User type from API (e.g., "business_qr_user")
 }
 
 // Mock users for development
@@ -91,6 +93,9 @@ export async function login(email: string, password: string): Promise<{ success:
 export async function logout(): Promise<void> {
   // In a real app, this would make an API call to invalidate the session
   await new Promise((resolve) => setTimeout(resolve, 200));
+  // Clear token and user data
+  setAuthToken(null);
+  setStoredUser(null);
 }
 
 export function getStoredUser(): User | null {
@@ -112,6 +117,22 @@ export function setStoredUser(user: User | null): void {
     localStorage.setItem("tribly_user", JSON.stringify(user));
   } else {
     localStorage.removeItem("tribly_user");
+  }
+}
+
+export function getAuthToken(): string | null {
+  if (typeof window === "undefined") return null;
+  // Check for token in localStorage
+  return localStorage.getItem("auth_token") || localStorage.getItem("token") || null;
+}
+
+export function setAuthToken(token: string | null): void {
+  if (typeof window === "undefined") return;
+  if (token) {
+    localStorage.setItem("auth_token", token);
+  } else {
+    localStorage.removeItem("auth_token");
+    localStorage.removeItem("token");
   }
 }
 
@@ -153,24 +174,24 @@ export function addSalesTeamMember(member: Omit<User, "id" | "createdAt" | "sale
   const existingIds = team
     .filter(m => m.salesPersonId)
     .map(m => m.salesPersonId || "");
-  
+
   let salesPersonId: string;
   let attempts = 0;
   const maxAttempts = 100; // Prevent infinite loop
-  
+
   // Generate random ID and ensure it's unique
   do {
     const randomNum = Math.floor(Math.random() * 10000);
     salesPersonId = `tribe${String(randomNum).padStart(4, '0')}`;
     attempts++;
   } while (existingIds.includes(salesPersonId) && attempts < maxAttempts);
-  
+
   // Fallback to timestamp-based if all random attempts fail (very unlikely)
   if (attempts >= maxAttempts) {
     const timestamp = Date.now().toString().slice(-4);
     salesPersonId = `tribe${timestamp}`;
   }
-  
+
   const newMember: User = {
     ...member,
     id: `sales-${Date.now()}`,
@@ -193,7 +214,7 @@ export function updateSalesTeamMember(memberId: string, updates: Partial<Omit<Us
   const team = getSalesTeam();
   const memberIndex = team.findIndex(m => m.id === memberId);
   if (memberIndex === -1) return null;
-  
+
   const updatedMember: User = {
     ...team[memberIndex],
     ...updates,
@@ -202,4 +223,3 @@ export function updateSalesTeamMember(memberId: string, updates: Partial<Omit<Us
   setSalesTeam(team);
   return updatedMember;
 }
-

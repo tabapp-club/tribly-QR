@@ -13,10 +13,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { addBusiness } from "@/lib/mock-data";
-import { BusinessStatus, BusinessCategory } from "@/lib/types";
+import { BusinessStatus, BusinessCategory, UserRole } from "@/lib/types";
 import { logout, setStoredUser, getStoredUser } from "@/lib/auth";
 import { generateQRCodeDataUrl } from "@/lib/qr-utils";
-import { 
+import {
   LogOut,
   ChevronDown,
   CheckCircle2,
@@ -41,25 +41,25 @@ export default function SalesDashboardPage() {
       router.push("/login");
       return;
     }
-    
+
     // Redirect admin users to regular dashboard
     if (currentUser.role === "admin") {
       router.push("/dashboard");
       return;
     }
-    
+
     // Ensure user has role property
     if (!currentUser.role) {
       const updatedUser = {
         ...currentUser,
-        role: "sales-team",
+        role: "sales-team" as UserRole,
       };
       setStoredUser(updatedUser);
       setUser(updatedUser);
     } else {
       setUser(currentUser);
     }
-    
+
   }, [router]);
 
   const handleLogout = async () => {
@@ -146,11 +146,11 @@ export default function SalesDashboardPage() {
           const businessName = newBusiness.name || "New Business";
           const sessionId = `payment-${Date.now()}`;
           setPaymentSessionId(sessionId);
-          
+
           // Generate UPI payment URL (format: upi://pay?pa=merchant@upi&pn=MerchantName&am=Amount&cu=INR&tn=TransactionNote)
           // For demo, we'll use a generic payment URL
           const paymentUrl = `upi://pay?pa=tribly@pay&pn=Tribly%20QR&am=${planPrice}&cu=INR&tn=${planName}%20Subscription%20-%20${encodeURIComponent(businessName)}`;
-          
+
           const qrCode = await generateQRCodeDataUrl(paymentUrl);
           setPaymentQRCode(qrCode);
           setPaymentStatus("pending");
@@ -184,17 +184,19 @@ export default function SalesDashboardPage() {
 
   const handleOnboardBusiness = () => {
     if (!user) return;
-    
+
     // Create business with salesTeamId
     const businessData = {
       ...newBusiness,
+      category: (newBusiness.category || "other") as BusinessCategory,
+      paymentPlan: (newBusiness.paymentPlan || undefined) as "qr-basic" | "qr-plus" | undefined,
       salesTeamId: user.id,
       feedbackTone: "professional" as const,
       autoReplyEnabled: false,
     };
-    
+
     addBusiness(businessData);
-    
+
     // Reset form
     setNewBusiness({
       name: "",
@@ -211,7 +213,7 @@ export default function SalesDashboardPage() {
       paymentExpiryDate: "",
       paymentStatus: undefined,
     });
-    
+
     // Show success message (you can add a toast notification here)
     alert("Business onboarded successfully!");
   };
@@ -476,7 +478,7 @@ export default function SalesDashboardPage() {
                   </Label>
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     {/* QR-Plus Plan */}
-                    <Card 
+                    <Card
                       className={`relative cursor-pointer transition-all hover:shadow-md ${
                         newBusiness.paymentPlan === "qr-plus" ? "ring-2 ring-primary" : ""
                       }`}
@@ -559,7 +561,7 @@ export default function SalesDashboardPage() {
                     </Card>
 
                     {/* QR-Basic Plan */}
-                    <Card 
+                    <Card
                       className={`relative cursor-pointer transition-all hover:shadow-md ${
                         newBusiness.paymentPlan === "qr-basic" ? "ring-2 ring-primary" : ""
                       }`}
@@ -920,4 +922,3 @@ export default function SalesDashboardPage() {
     </div>
   );
 }
-

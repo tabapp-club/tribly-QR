@@ -10,18 +10,18 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  getStoredUser, 
-  setStoredUser, 
-  getSalesTeam, 
-  addSalesTeamMember, 
+import {
+  getStoredUser,
+  setStoredUser,
+  getSalesTeam,
+  addSalesTeamMember,
   removeSalesTeamMember,
   updateSalesTeamMember,
   logout,
   User
 } from "@/lib/auth";
 import { UserRole } from "@/lib/types";
-  import { 
+  import {
     ArrowLeft,
     User as UserIcon,
     Mail,
@@ -70,20 +70,20 @@ export default function ProfilePage() {
       router.push("/login");
       return;
     }
-    
+
     // Ensure user has role property (migration for existing users)
     if (!currentUser.role) {
       // Default to admin for existing admin@tribly.com users
       const updatedUser = {
         ...currentUser,
-        role: currentUser.email === "admin@tribly.com" ? "admin" : "sales-team",
+        role: (currentUser.email === "admin@tribly.com" ? "admin" : "sales-team") as UserRole,
       };
       setStoredUser(updatedUser);
       setUser(updatedUser);
     } else {
       setUser(currentUser);
     }
-    
+
     setProfileData({
       name: currentUser.name,
       email: currentUser.email,
@@ -109,7 +109,10 @@ export default function ProfilePage() {
     if (!newMember.name || !newMember.email) {
       return;
     }
-    const member = addSalesTeamMember(newMember);
+    const member = addSalesTeamMember({
+      ...newMember,
+      role: "sales-team" as UserRole,
+    });
     setSalesTeam(getSalesTeam());
     setNewMember({ name: "", email: "", phone: "" });
     setIsAddMemberOpen(false);
@@ -519,4 +522,3 @@ export default function ProfilePage() {
     </div>
   );
 }
-

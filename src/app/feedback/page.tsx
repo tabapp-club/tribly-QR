@@ -1,8 +1,8 @@
 "use client";
 
 import { useSearchParams, useRouter } from "next/navigation";
-import { useState, useMemo } from "react";
-import { Copy } from "lucide-react";
+import { useState, useMemo, useEffect, useCallback, Suspense } from "react";
+import { Copy, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Toast } from "@/components/ui/toast";
@@ -121,25 +121,109 @@ const getFeedbackSuggestions = (rating: number): FeedbackItem[] => {
   return baseFeedbacks.filter((feedback) => feedback.rating === rating);
 };
 
-export default function FeedbackPage() {
+function FeedbackPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const ratingParam = searchParams.get("rating");
+  const qrId = searchParams.get("qr");
   const rating = ratingParam === "excellent" ? 5 : ratingParam === "good" ? 4 : ratingParam === "average" ? 3 : null;
+  const ratingLabel = ratingParam === "excellent" ? "Excellent" : ratingParam === "good" ? "Good" : ratingParam === "average" ? "Average" : null;
 
   const [selectedFilter, setSelectedFilter] = useState<FilterType | null>(null);
   const [showToast, setShowToast] = useState(false);
+  const [allFeedbacks, setAllFeedbacks] = useState<FeedbackItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Get feedbacks based on rating
-  const allFeedbacks = useMemo(() => {
-    if (!rating) return [];
-    return getFeedbackSuggestions(rating);
-  }, [rating]);
+  // Fetch reviews from API
+  const fetchReviews = useCallback(async (tag: FilterType | null = null) => {
+    if (!qrId || !ratingLabel) {
+      // Fallback to mock data if no qr_id
+      if (rating) {
+        setAllFeedbacks(getFeedbackSuggestions(rating));
+      }
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.tribly.ai";
+      const params = new URLSearchParams({
+        qr_id: qrId,
+        rating: ratingLabel,
+      });
+
+      if (tag) {
+        params.set("tag", tag);
+      }
+
+      const response = await fetch(`${apiBaseUrl}/dashboard/v1/business_qr/generate_reviews?${params.toString()}`);
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch reviews");
+      }
+
+      const apiResponse = await response.json();
+
+      // API response format: { "message": "", "data": { "reviews": [] } }
+      const reviewsData = apiResponse.data?.reviews || [];
+
+      // Map API response to FeedbackItem format
+      // Handle both cases: array of strings or array of objects
+      const reviews: FeedbackItem[] = reviewsData
+        .map((review: any, index: number) => {
+          // If review is a string, use it directly as text
+          if (typeof review === "string") {
+            return {
+              id: `review-${index}`,
+              category: (tag || "product") as FilterType, // Use tag parameter if available, otherwise default to "product"
+              text: review,
+              rating: rating || 0,
+            };
+          }
+
+          // If review is an object, extract text from various possible fields
+          return {
+            id: review.id || `review-${index}`,
+            category: (review.tag || review.category || tag || "product") as FilterType,
+            text: review.text || review.feedback || review.review || review.content || review.review_text || "",
+            rating: rating || 0,
+          };
+        })
+        .filter((review: FeedbackItem) => review.text.trim().length > 0); // Filter out empty reviews
+
+      if (reviews.length === 0 && reviewsData.length > 0) {
+        console.warn("All reviews were empty or had no text field");
+        setError("Reviews received but no text content found. Please check the API response format.");
+      } else {
+        setAllFeedbacks(reviews);
+      }
+    } catch (err) {
+      console.error("Error fetching reviews:", err);
+      setError("Failed to load reviews. Please try again.");
+      // Fallback to mock data on error
+      if (rating) {
+        setAllFeedbacks(getFeedbackSuggestions(rating));
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [qrId, ratingLabel, rating]);
+
+  // Fetch reviews on mount and when rating/qrId changes
+  useEffect(() => {
+    fetchReviews();
+  }, [fetchReviews]);
 
   // Filter feedbacks based on selected category
   const filteredFeedbacks = useMemo(() => {
-    if (!selectedFilter) return allFeedbacks;
-    return allFeedbacks.filter((feedback) => feedback.category === selectedFilter);
+    if (!selectedFilter) {
+      return allFeedbacks;
+    }
+    const filtered = allFeedbacks.filter((feedback) => feedback.category === selectedFilter);
+    return filtered;
   }, [allFeedbacks, selectedFilter]);
 
   const filters: { id: FilterType; label: string }[] = [
@@ -149,34 +233,86 @@ export default function FeedbackPage() {
     { id: "offers-discounts", label: "Offers & Discounts" },
   ];
 
-  const handleCopyAndSubmit = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setShowToast(true);
-      
-      // Get business code from URL or sessionStorage
-      const codeParam = searchParams.get("code");
-      const businessCode = codeParam || sessionStorage.getItem("businessCode");
+  // Handle filter click - fetch reviews with tag
+  const handleFilterClick = (filter: FilterType) => {
+    const newFilter = selectedFilter === filter ? null : filter;
+    setSelectedFilter(newFilter);
+    // Fetch reviews with the selected tag
+    if (newFilter) {
+      fetchReviews(newFilter);
+    } else {
+      // If filter is deselected, fetch without tag
+      fetchReviews(null);
+    }
+  };
+
+  const navigateToReview = async () => {
+    const qrId = searchParams.get("qr");
+    let googleReviewLink = null;
+
+    // First, try to get from API if qr parameter exists
+    if (qrId) {
+      try {
+        const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.tribly.ai";
+        const response = await fetch(`${apiBaseUrl}/dashboard/v1/business_qr/scan?qr_id=${qrId}`);
+
+        if (response.ok) {
+          const apiResponse = await response.json();
+          googleReviewLink = apiResponse.data?.business_google_review_url;
+        }
+      } catch (error) {
+        console.error("Failed to fetch business QR data:", error);
+      }
+    }
+
+    // Fallback to mock data if API didn't provide the link
+    if (!googleReviewLink) {
       const businessId = sessionStorage.getItem("businessId");
-      
-      // Get Google Business review link
-      let googleReviewLink = null;
       if (businessId) {
         const { getBusinessById } = await import("@/lib/mock-data");
         const business = getBusinessById(businessId);
         googleReviewLink = business?.googleBusinessReviewLink;
       }
-      
-      // Navigate to Google Business review if available, otherwise to rating page
-      setTimeout(() => {
-        if (googleReviewLink) {
-          window.location.href = googleReviewLink;
-        } else {
-          router.push("/rating");
-        }
-      }, 500);
+    }
+
+    // Navigate to Google Business review if available, otherwise to rating page
+    setTimeout(() => {
+      if (googleReviewLink) {
+        window.location.href = googleReviewLink;
+      } else {
+        router.push("/rating");
+      }
+    }, 500);
+  };
+
+  const handleCopyAndSubmit = async (text: string) => {
+    let copySuccess = false;
+
+    try {
+      await navigator.clipboard.writeText(text);
+      copySuccess = true;
     } catch (err) {
       console.error("Failed to copy text:", err);
+      // Fallback for older browsers
+      try {
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        textArea.style.top = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        copySuccess = document.execCommand("copy");
+        document.body.removeChild(textArea);
+      } catch (fallbackErr) {
+        console.error("Fallback copy failed:", fallbackErr);
+      }
+    }
+
+    if (copySuccess) {
+      setShowToast(true);
+      await navigateToReview();
     }
   };
 
@@ -218,9 +354,42 @@ export default function FeedbackPage() {
             </p>
             <Button
               variant="link"
-              onClick={() => {
-                const codeParam = searchParams.get("code");
-                router.push(`/manual-feedback?rating=${ratingParam}${codeParam ? `&code=${codeParam}` : ""}`);
+              onClick={async () => {
+                const qrId = searchParams.get("qr");
+                let googleReviewLink = null;
+
+                // First, try to get from API if qr parameter exists
+                if (qrId) {
+                  try {
+                    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.tribly.ai";
+                    const response = await fetch(`${apiBaseUrl}/dashboard/v1/business_qr/scan?qr_id=${qrId}`);
+
+                    if (response.ok) {
+                      const apiResponse = await response.json();
+                      googleReviewLink = apiResponse.data?.business_google_review_url;
+                    }
+                  } catch (error) {
+                    console.error("Failed to fetch business QR data:", error);
+                  }
+                }
+
+                // Fallback to mock data if API didn't provide the link
+                if (!googleReviewLink) {
+                  const businessId = sessionStorage.getItem("businessId");
+                  if (businessId) {
+                    const { getBusinessById } = await import("@/lib/mock-data");
+                    const business = getBusinessById(businessId);
+                    googleReviewLink = business?.googleBusinessReviewLink;
+                  }
+                }
+
+                // Navigate to Google Business review if available, otherwise to manual feedback
+                if (googleReviewLink) {
+                  window.location.href = googleReviewLink;
+                } else {
+                  const codeParam = searchParams.get("code");
+                  router.push(`/manual-feedback?rating=${ratingParam}${codeParam ? `&code=${codeParam}` : ""}${qrId ? `${codeParam ? "&" : "?"}qr=${qrId}` : ""}`);
+                }
               }}
               className="text-[#9747FF] hover:text-[#9747FF]/80 underline p-0 h-auto"
             >
@@ -236,7 +405,8 @@ export default function FeedbackPage() {
               <Button
                 key={filter.id}
                 variant={selectedFilter === filter.id ? "default" : "outline"}
-                onClick={() => setSelectedFilter(selectedFilter === filter.id ? null : filter.id)}
+                onClick={() => handleFilterClick(filter.id)}
+                disabled={isLoading}
                 className={
                   selectedFilter === filter.id
                     ? "bg-[#9747FF] text-white border-[#9747FF] hover:bg-[#9747FF]/90 rounded-full px-4 py-2 whitespace-nowrap flex-shrink-0"
@@ -251,12 +421,38 @@ export default function FeedbackPage() {
 
         {/* Feedback Cards */}
         <div className="grid gap-4 sm:gap-6">
-          {filteredFeedbacks.length === 0 ? (
+          {isLoading ? (
+            <Card className="bg-white/80 backdrop-blur-sm border-[#9747FF]/20">
+              <CardContent className="p-8 text-center">
+                <div className="flex flex-col items-center gap-4">
+                  <Loader2 className="h-8 w-8 animate-spin text-[#9747FF]" />
+                  <p className="text-muted-foreground">Loading reviews...</p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : error ? (
+            <Card className="bg-white/80 backdrop-blur-sm border-[#9747FF]/20">
+              <CardContent className="p-8 text-center">
+                <p className="text-destructive">{error}</p>
+              </CardContent>
+            </Card>
+          ) : filteredFeedbacks.length === 0 ? (
             <Card className="bg-white/80 backdrop-blur-sm border-[#9747FF]/20">
               <CardContent className="p-8 text-center">
                 <p className="text-muted-foreground">
-                  No feedbacks found for this filter. Try selecting a different category.
+                  {allFeedbacks.length === 0
+                    ? "No reviews found. Please try again or check if the API returned any reviews."
+                    : "No feedbacks found for this filter. Try selecting a different category."}
                 </p>
+                {allFeedbacks.length === 0 && (
+                  <Button
+                    variant="outline"
+                    onClick={() => fetchReviews(selectedFilter)}
+                    className="mt-4"
+                  >
+                    Retry
+                  </Button>
+                )}
               </CardContent>
             </Card>
           ) : (
@@ -293,3 +489,21 @@ export default function FeedbackPage() {
   );
 }
 
+export default function FeedbackPage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen bg-gradient-to-br from-[#F7F1FF] via-[#F3EBFF] to-[#EFE5FF] flex flex-col items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="p-8 text-center">
+            <div className="flex flex-col items-center gap-4">
+              <Loader2 className="h-8 w-8 animate-spin text-[#9747FF]" />
+              <p className="text-muted-foreground">Loading...</p>
+            </div>
+          </CardContent>
+        </Card>
+      </main>
+    }>
+      <FeedbackPageContent />
+    </Suspense>
+  );
+}

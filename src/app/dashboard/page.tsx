@@ -10,14 +10,13 @@ import { Label } from "@/components/ui/label";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { mockBusinesses } from "@/lib/mock-data";
-import { Business, BusinessStatus, BusinessCategory } from "@/lib/types";
-import { logout, setStoredUser, getStoredUser, getSalesTeam } from "@/lib/auth";
-import { generateBusinessSlug } from "@/lib/business-slug";
-import { 
-  Building2, 
-  CheckCircle2, 
-  XCircle, 
-  Search, 
+import { Business, BusinessStatus, BusinessCategory, UserRole } from "@/lib/types";
+import { logout, setStoredUser, getStoredUser, getSalesTeam, getAuthToken } from "@/lib/auth";
+import {
+  Building2,
+  CheckCircle2,
+  XCircle,
+  Search,
   FileText,
   Filter,
   X,
@@ -27,7 +26,8 @@ import {
   Mail,
   Phone,
   MapPin,
-  UserCircle
+  UserCircle,
+  AlertCircle
 } from "lucide-react";
 
 export default function DashboardPage() {
@@ -39,6 +39,102 @@ export default function DashboardPage() {
   const [onboardedByFilter, setOnboardedByFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<BusinessStatus | "due-date" | "pending" | "all">("all");
   const [user, setUser] = useState(getStoredUser());
+  const [businesses, setBusinesses] = useState<Business[]>([]);
+  const [isLoadingBusinesses, setIsLoadingBusinesses] = useState(false);
+  const [businessesError, setBusinessesError] = useState<string | null>(null);
+
+  // Fetch onboarded businesses for admin users
+  useEffect(() => {
+    const fetchOnboardedBusinesses = async () => {
+      const currentUser = getStoredUser();
+      if (!currentUser) return;
+
+      // Only fetch for admin users
+      const isAdmin = currentUser.role === "admin" || currentUser.userType === "admin";
+      if (!isAdmin) return;
+
+      setIsLoadingBusinesses(true);
+      setBusinessesError(null);
+
+      try {
+        const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.tribly.ai";
+        const authToken = getAuthToken();
+
+        const headers: HeadersInit = {
+          "Content-Type": "application/json",
+        };
+
+        if (authToken) {
+          headers["Authorization"] = `Bearer ${authToken}`;
+        }
+
+        const response = await fetch(`${apiBaseUrl}/dashboard/v1/business_qr/onboarded_businesses`, {
+          method: "GET",
+          headers,
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || "Failed to fetch onboarded businesses");
+        }
+
+        const data = await response.json();
+
+        if (data.status !== "success" || !data.data) {
+          throw new Error(data.message || "Failed to fetch onboarded businesses");
+        }
+
+        // Map API response to Business type
+        const mappedBusinesses: Business[] = data.data.map((business: any) => {
+          // Find sales team member by name to get their ID
+          const salesTeam = getSalesTeam();
+          const salesTeamMember = salesTeam.find(m => m.name === business.onboarded_by);
+          const salesTeamId = salesTeamMember?.id;
+
+          // Map category from API response, validate it's a valid BusinessCategory
+          const validCategories: BusinessCategory[] = [
+            "restaurant", "retail", "healthcare", "beauty", "fitness",
+            "automotive", "real-estate", "education", "hospitality", "other"
+          ];
+          const apiCategory = business.category || business.business_category || business.type;
+          const category: BusinessCategory = validCategories.includes(apiCategory)
+            ? apiCategory as BusinessCategory
+            : "other";
+
+          return {
+            id: business.qr_id || `business-${Date.now()}-${Math.random()}`,
+            name: business.name || "",
+            status: (business.status || "active") as BusinessStatus,
+            category: category,
+            email: business.email || "",
+            phone: business.phone || undefined,
+            city: business.city || undefined,
+            area: business.area || undefined,
+            createdAt: business.created_at || new Date().toISOString(),
+            updatedAt: business.created_at || new Date().toISOString(),
+            feedbackTone: "friendly" as const, // Default value
+            autoReplyEnabled: true, // Default value
+            salesTeamId: salesTeamId || undefined,
+            totalReviews: business.feedback_count || 0, // Default value - can be updated if API provides it
+            activeReviews: 0,
+            inactiveReviews: 0,
+            reviewsInQueue: 0,
+          };
+        });
+
+        setBusinesses(mappedBusinesses);
+      } catch (error) {
+        console.error("Error fetching onboarded businesses:", error);
+        setBusinessesError(error instanceof Error ? error.message : "Failed to fetch businesses");
+        // Fallback to mock data on error
+        setBusinesses(mockBusinesses);
+      } finally {
+        setIsLoadingBusinesses(false);
+      }
+    };
+
+    fetchOnboardedBusinesses();
+  }, []);
 
   useEffect(() => {
     const currentUser = getStoredUser();
@@ -48,20 +144,26 @@ export default function DashboardPage() {
         // Default to admin for existing admin@tribly.com users
         const updatedUser = {
           ...currentUser,
-          role: currentUser.email === "admin@tribly.com" ? "admin" : "sales-team",
+          role: (currentUser.email === "admin@tribly.com" ? "admin" : "sales-team") as UserRole,
         };
         setStoredUser(updatedUser);
         setUser(updatedUser);
       } else {
         setUser(currentUser);
       }
-      
+
+      // Redirect business_qr_user to their business dashboard
+      if (currentUser.userType === "business_qr_user" && currentUser.qrId) {
+        router.push(`/dashboard/business/${currentUser.qrId}`);
+        return;
+      }
+
       // Redirect sales team members to sales dashboard
       if (currentUser.role === "sales-team") {
         router.push("/sales-dashboard");
         return;
       }
-      
+
     }
   }, [router]);
 
@@ -74,15 +176,21 @@ export default function DashboardPage() {
   // Get businesses based on user role
   const availableBusinesses = useMemo(() => {
     if (!user) return [];
-    
+
     // Sales team sees only businesses they onboarded
     if (user.role === "sales-team") {
       return mockBusinesses.filter((b) => b.salesTeamId === user.id);
     }
-    
-    // Admin sees all businesses
-    return mockBusinesses;
-  }, [user]);
+
+    // Admin sees businesses from API if available, otherwise return empty array
+    const isAdmin = user.role === "admin" || user.userType === "admin";
+    if (isAdmin && businesses.length > 0) {
+      return businesses;
+    }
+
+    // Return empty array for admin if API data not loaded yet (shows 0 by default)
+    return [];
+  }, [user, businesses]);
 
 
   // Get unique cities for city filter
@@ -172,7 +280,7 @@ export default function DashboardPage() {
         const today = new Date();
         const sixtyDaysFromNow = new Date(today);
         sixtyDaysFromNow.setDate(today.getDate() + 60);
-        
+
         filtered = filtered.filter((business) => {
           if (!business.paymentExpiryDate) return false;
           const expiryDate = new Date(business.paymentExpiryDate);
@@ -185,7 +293,7 @@ export default function DashboardPage() {
         today.setHours(0, 0, 0, 0);
         const oneDayAgo = new Date(today);
         oneDayAgo.setDate(today.getDate() - 1);
-        
+
         filtered = filtered.filter((business) => {
           if (!business.billingDate) return false;
           const billingDate = new Date(business.billingDate);
@@ -198,7 +306,7 @@ export default function DashboardPage() {
         const today = new Date();
         const thirtyDaysAgo = new Date(today);
         thirtyDaysAgo.setDate(today.getDate() - 30);
-        
+
         filtered = filtered.filter((business) => {
           // Manual status update (status is explicitly inactive)
           if (business.status === "inactive") {
@@ -239,8 +347,8 @@ export default function DashboardPage() {
   };
 
   const handleBusinessClick = (business: Business) => {
-    const slug = generateBusinessSlug(business);
-    router.push(`/dashboard/business/${slug}`);
+    // Use qr_id directly for navigation (business.id is already set to qr_id from API)
+    router.push(`/dashboard/business/${business.id}`);
   };
 
   const getStatusBadge = (status: BusinessStatus) => {
@@ -270,8 +378,8 @@ export default function DashboardPage() {
           <div>
             <h1 className="text-3xl font-bold text-foreground mb-2">Dashboard</h1>
             <p className="text-muted-foreground">
-              {user?.role === "sales-team" 
-                ? "Manage your onboarded businesses" 
+              {user?.role === "sales-team"
+                ? "Manage your onboarded businesses"
                 : "Manage your businesses and reviews"}
             </p>
           </div>
@@ -409,8 +517,8 @@ export default function DashboardPage() {
               {/* Area Filter */}
               <div className="space-y-2">
                 <Label htmlFor="area-filter">Area</Label>
-                <Select 
-                  value={areaFilter} 
+                <Select
+                  value={areaFilter}
                   onValueChange={setAreaFilter}
                   disabled={cityFilter !== "all" && uniqueAreas.length === 0}
                 >
@@ -457,7 +565,7 @@ export default function DashboardPage() {
               <div>
                 <CardTitle>All Businesses ({filteredBusinesses.length})</CardTitle>
                 <CardDescription>
-                  {user?.role === "sales-team" 
+                  {user?.role === "sales-team"
                     ? "Manage your onboarded businesses"
                     : filteredBusinesses.length === availableBusinesses.length
                     ? "Manage and view all your businesses"
@@ -467,13 +575,25 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {filteredBusinesses.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No businesses found</p>
-                </div>
-              ) : (
+            {isLoadingBusinesses && (user?.role === "admin" || user?.userType === "admin") ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                <p>Loading businesses...</p>
+              </div>
+            ) : businessesError && (user?.role === "admin" || user?.userType === "admin") ? (
+              <div className="text-center py-8 text-destructive">
+                <AlertCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p className="mb-2">Error loading businesses</p>
+                <p className="text-sm text-muted-foreground">{businessesError}</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredBusinesses.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No businesses found</p>
+                  </div>
+                ) : (
                 filteredBusinesses.map((business) => (
                   <div
                     key={business.id}
@@ -522,12 +642,12 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 ))
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
     </div>
   );
 }
-
