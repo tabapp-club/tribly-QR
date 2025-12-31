@@ -4,7 +4,19 @@ This is a [Next.js](https://nextjs.org/) project bootstrapped with TypeScript, T
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+1. **Google Places API Key** (Required for business search functionality)
+   - Get your API key from [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+   - Enable the following APIs:
+     - Places API
+     - Places API (New)
+   - Create a `.env.local` file in the root directory:
+     ```env
+     NEXT_PUBLIC_GOOGLE_PLACES_API_KEY=your_google_places_api_key_here
+     ```
+
+### Running the Development Server
 
 ```bash
 npm run dev

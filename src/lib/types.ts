@@ -49,6 +49,8 @@ export interface Business {
   salesTeamId?: string; // ID of the sales team member who onboarded this business
   // SEO
   keywords?: string[]; // SEO keywords for the business
+  // Services
+  services?: string[]; // Business services offered
   // Stats
   totalReviews: number;
   activeReviews: number;

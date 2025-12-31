@@ -16,6 +16,8 @@ import { addBusiness } from "@/lib/mock-data";
 import { BusinessStatus, BusinessCategory } from "@/lib/types";
 import { logout, setStoredUser, getStoredUser } from "@/lib/auth";
 import { generateQRCodeDataUrl } from "@/lib/qr-utils";
+import { searchPlaces, getPlaceDetails, mapGoogleTypesToCategory, extractAddressComponents } from "@/lib/google-places";
+import { categorySuggestions, serviceSuggestions, getSuggestedCategories } from "@/lib/category-suggestions";
 import { 
   LogOut,
   ChevronDown,
@@ -28,7 +30,11 @@ import {
   Calendar,
   XCircle,
   Clock,
-  Loader2
+  Loader2,
+  Search,
+  X,
+  Plus,
+  MapPin
 } from "lucide-react";
 
 export default function SalesDashboardPage() {
@@ -83,7 +89,38 @@ export default function SalesDashboardPage() {
     status: "active" as BusinessStatus,
     paymentExpiryDate: "",
     paymentStatus: undefined as "active" | "past-due" | "cancelled" | undefined,
+    services: [] as string[],
   });
+
+  // Business search state
+  const [businessSearchQuery, setBusinessSearchQuery] = useState("");
+  const [businessSearchResults, setBusinessSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [selectedBusiness, setSelectedBusiness] = useState<any>(null);
+
+  // Category suggestions state
+  const [suggestedCategories, setSuggestedCategories] = useState<BusinessCategory[]>([]);
+
+  // Services state
+  const [serviceInput, setServiceInput] = useState("");
+  const [showServiceSuggestions, setShowServiceSuggestions] = useState(false);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.business-search-container') && !target.closest('.search-results-dropdown')) {
+        setShowSearchResults(false);
+      }
+      if (!target.closest('.service-input-container') && !target.closest('.service-suggestions-dropdown')) {
+        setShowServiceSuggestions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState<"pending" | "success" | "failed" | "expired">("pending");
@@ -182,6 +219,91 @@ export default function SalesDashboardPage() {
     setShowPaymentDialog(true);
   };
 
+  // Business search handler
+  useEffect(() => {
+    const searchBusinesses = async () => {
+      if (businessSearchQuery.length < 3) {
+        setBusinessSearchResults([]);
+        setShowSearchResults(false);
+        return;
+      }
+
+      setIsSearching(true);
+      try {
+        const results = await searchPlaces(businessSearchQuery);
+        setBusinessSearchResults(results);
+        setShowSearchResults(results.length > 0);
+      } catch (error) {
+        console.error("Error searching businesses:", error);
+        setBusinessSearchResults([]);
+        setShowSearchResults(false);
+      } finally {
+        setIsSearching(false);
+      }
+    };
+
+    const debounceTimer = setTimeout(searchBusinesses, 300);
+    return () => clearTimeout(debounceTimer);
+  }, [businessSearchQuery]);
+
+  // Handle business selection
+  const handleSelectBusiness = async (placeId: string, description: string) => {
+    setIsSearching(true);
+    try {
+      const details = await getPlaceDetails(placeId);
+      if (details) {
+        const addressComponents = extractAddressComponents(details);
+        const category = mapGoogleTypesToCategory(details.types || []);
+        const suggestedCats = getSuggestedCategories(description);
+        
+        setSelectedBusiness(details);
+        setNewBusiness((prev) => ({
+          ...prev,
+          name: details.name,
+          phone: details.formatted_phone_number || details.international_phone_number || "",
+          address: addressComponents.address,
+          city: addressComponents.city,
+          area: addressComponents.area,
+          category: category as BusinessCategory,
+          googleBusinessReviewLink: details.website || "",
+        }));
+        setSuggestedCategories(suggestedCats);
+        setBusinessSearchQuery(details.name);
+        setShowSearchResults(false);
+      }
+    } catch (error) {
+      console.error("Error getting business details:", error);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Get service suggestions based on category
+  const getServiceSuggestions = useMemo(() => {
+    if (!newBusiness.category) return [];
+    return serviceSuggestions[newBusiness.category] || [];
+  }, [newBusiness.category]);
+
+  // Add service
+  const handleAddService = (service: string) => {
+    if (service.trim() && !newBusiness.services.includes(service.trim())) {
+      setNewBusiness((prev) => ({
+        ...prev,
+        services: [...prev.services, service.trim()],
+      }));
+      setServiceInput("");
+      setShowServiceSuggestions(false);
+    }
+  };
+
+  // Remove service
+  const handleRemoveService = (service: string) => {
+    setNewBusiness((prev) => ({
+      ...prev,
+      services: prev.services.filter((s) => s !== service),
+    }));
+  };
+
   const handleOnboardBusiness = () => {
     if (!user) return;
     
@@ -210,7 +332,13 @@ export default function SalesDashboardPage() {
       status: "active" as BusinessStatus,
       paymentExpiryDate: "",
       paymentStatus: undefined,
+      services: [],
     });
+    
+    setBusinessSearchQuery("");
+    setSelectedBusiness(null);
+    setSuggestedCategories([]);
+    setServiceInput("");
     
     // Show success message (you can add a toast notification here)
     alert("Business onboarded successfully!");
@@ -260,6 +388,109 @@ export default function SalesDashboardPage() {
 
         {/* Onboarding Form */}
         <div className="grid gap-6 mt-8">
+          {/* Business Search Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Search className="h-5 w-5" />
+                Search Business
+              </CardTitle>
+              <CardDescription>
+                Search for local businesses using Google Places API to auto-fill information
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4">
+                <div className="grid gap-2 relative business-search-container">
+                  <Label htmlFor="business-search">
+                    Search Business <span className="text-muted-foreground">(Optional)</span>
+                  </Label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="business-search"
+                      placeholder="Type business name or address..."
+                      value={businessSearchQuery}
+                      onChange={(e) => {
+                        setBusinessSearchQuery(e.target.value);
+                        if (e.target.value.length >= 3 && !selectedBusiness) {
+                          setShowSearchResults(true);
+                        } else if (e.target.value.length < 3) {
+                          setShowSearchResults(false);
+                        }
+                      }}
+                      onFocus={() => {
+                        if (businessSearchResults.length > 0 && !selectedBusiness) {
+                          setShowSearchResults(true);
+                        }
+                      }}
+                      className="pl-10"
+                    />
+                    {isSearching && (
+                      <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                    )}
+                  </div>
+                  
+                  {/* Search Results Dropdown */}
+                  {showSearchResults && businessSearchResults.length > 0 && !selectedBusiness && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-auto top-full search-results-dropdown">
+                      {businessSearchResults.map((result) => (
+                        <div
+                          key={result.place_id}
+                          className="p-3 hover:bg-muted cursor-pointer border-b last:border-b-0"
+                          onClick={() => handleSelectBusiness(result.place_id, result.description)}
+                        >
+                          <div className="flex items-start gap-2">
+                            <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-sm truncate">
+                                {result.structured_formatting.main_text}
+                              </p>
+                              <p className="text-xs text-muted-foreground truncate">
+                                {result.structured_formatting.secondary_text}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {selectedBusiness && (
+                    <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-md">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-green-900">
+                            Selected: {selectedBusiness.name}
+                          </p>
+                          <p className="text-xs text-green-700 mt-1">
+                            Business information has been auto-filled
+                          </p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedBusiness(null);
+                            setBusinessSearchQuery("");
+                            setShowSearchResults(false);
+                          }}
+                          className="h-6 w-6 p-0"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  <p className="text-xs text-muted-foreground">
+                    Start typing to search for businesses. Select a business to auto-fill the form.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Basic Information Section */}
           <Card>
             <CardHeader>
@@ -285,13 +516,24 @@ export default function SalesDashboardPage() {
                     Enter the official business name as it appears on legal documents
                   </p>
                 </div>
+                
+                {/* Dotted Separator */}
+                <div className="relative my-2">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-dotted border-muted-foreground/30"></div>
+                  </div>
+                </div>
+                
                 <div className="grid gap-2">
                   <Label htmlFor="category">
                     Business Category <span className="text-destructive">*</span>
                   </Label>
                   <Select
                     value={newBusiness.category}
-                    onValueChange={(value) => setNewBusiness({ ...newBusiness, category: value as BusinessCategory })}
+                    onValueChange={(value) => {
+                      setNewBusiness({ ...newBusiness, category: value as BusinessCategory });
+                      setServiceInput(""); // Reset service input when category changes
+                    }}
                   >
                     <SelectTrigger id="category">
                       <SelectValue placeholder="Select business category" />
@@ -309,8 +551,162 @@ export default function SalesDashboardPage() {
                       <SelectItem value="other">Other</SelectItem>
                     </SelectContent>
                   </Select>
+                  
+                  {/* Category Suggestions */}
+                  {suggestedCategories.length > 0 && !newBusiness.category && (
+                    <div className="mt-2">
+                      <p className="text-xs text-muted-foreground mb-2">Suggested categories:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {suggestedCategories.map((cat) => (
+                          <Badge
+                            key={cat}
+                            variant="outline"
+                            className="cursor-pointer hover:bg-primary hover:text-primary-foreground"
+                            onClick={() => setNewBusiness({ ...newBusiness, category: cat })}
+                          >
+                            {cat.split("-").map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(" ")}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Category-specific suggestions */}
+                  {newBusiness.category && categorySuggestions[newBusiness.category] && (
+                    <div className="mt-2">
+                      <p className="text-xs text-muted-foreground mb-2">
+                        Common types for {newBusiness.category}:
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {categorySuggestions[newBusiness.category].slice(0, 5).map((suggestion) => (
+                          <Badge
+                            key={suggestion}
+                            variant="secondary"
+                            className="text-xs"
+                          >
+                            {suggestion}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <p className="text-xs text-muted-foreground">
                     Select the primary category that best describes the business
+                  </p>
+                </div>
+                
+                {/* Dotted Separator */}
+                <div className="relative my-2">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-dotted border-muted-foreground/30"></div>
+                  </div>
+                </div>
+                
+                {/* Services Section */}
+                <div className="grid gap-2">
+                  <Label htmlFor="services">Business Services</Label>
+                  <div className="relative service-input-container">
+                    <Input
+                      id="services"
+                      placeholder={newBusiness.category ? `Add a service (e.g., ${getServiceSuggestions[0] || "Service name"})` : "Select a category first to see suggestions"}
+                      value={serviceInput}
+                      onChange={(e) => {
+                        setServiceInput(e.target.value);
+                        setShowServiceSuggestions(e.target.value.length > 0 && getServiceSuggestions.length > 0);
+                      }}
+                      onFocus={() => {
+                        if (getServiceSuggestions.length > 0) {
+                          setShowServiceSuggestions(true);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && serviceInput.trim()) {
+                          e.preventDefault();
+                          handleAddService(serviceInput);
+                        }
+                      }}
+                      disabled={!newBusiness.category}
+                    />
+                    
+                    {/* Service Suggestions Dropdown */}
+                    {showServiceSuggestions && getServiceSuggestions.length > 0 && (
+                      <div className="absolute z-50 w-full mt-1 bg-white border rounded-md shadow-lg max-h-48 overflow-auto top-full service-suggestions-dropdown">
+                        {getServiceSuggestions
+                          .filter((suggestion) =>
+                            suggestion.toLowerCase().includes(serviceInput.toLowerCase())
+                          )
+                          .map((suggestion) => (
+                            <div
+                              key={suggestion}
+                              className="p-2 hover:bg-muted cursor-pointer border-b last:border-b-0"
+                              onClick={() => handleAddService(suggestion)}
+                            >
+                              <div className="flex items-center gap-2">
+                                <Plus className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-sm">{suggestion}</span>
+                              </div>
+                            </div>
+                          ))}
+                        {serviceInput.trim() && !getServiceSuggestions.some(s => s.toLowerCase() === serviceInput.toLowerCase()) && (
+                          <div
+                            className="p-2 hover:bg-muted cursor-pointer border-t"
+                            onClick={() => handleAddService(serviceInput)}
+                          >
+                            <div className="flex items-center gap-2">
+                              <Plus className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-sm">Add "{serviceInput}"</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Service Suggestions */}
+                  {newBusiness.category && getServiceSuggestions.length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-xs text-muted-foreground mb-2">Suggested business services:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {getServiceSuggestions.slice(0, 8).map((suggestion) => (
+                          <Badge
+                            key={suggestion}
+                            variant="outline"
+                            className="cursor-pointer hover:bg-primary hover:text-primary-foreground"
+                            onClick={() => handleAddService(suggestion)}
+                          >
+                            <Plus className="h-3 w-3 mr-1" />
+                            {suggestion}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Added Services */}
+                  {newBusiness.services.length > 0 && (
+                    <div className="mt-3">
+                      <p className="text-xs text-muted-foreground mb-2">Added business services:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {newBusiness.services.map((service) => (
+                          <Badge
+                            key={service}
+                            variant="default"
+                            className="cursor-pointer"
+                            onClick={() => handleRemoveService(service)}
+                          >
+                            {service}
+                            <X className="h-3 w-3 ml-1" />
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <p className="text-xs text-muted-foreground">
+                    {newBusiness.category
+                      ? "Click on suggested business services or type to add custom services"
+                      : "Select a business category first to see business service suggestions"}
                   </p>
                 </div>
               </div>
@@ -696,7 +1092,12 @@ export default function SalesDashboardPage() {
                       status: "active" as BusinessStatus,
                       paymentExpiryDate: "",
                       paymentStatus: undefined,
+                      services: [],
                     });
+                    setBusinessSearchQuery("");
+                    setSelectedBusiness(null);
+                    setSuggestedCategories([]);
+                    setServiceInput("");
                   }}
                 >
                   Clear Form
