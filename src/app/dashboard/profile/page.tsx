@@ -118,8 +118,8 @@ export default function ProfilePage() {
       }
 
       // Map API response to local format
-      const mappedTeam: SalesTeamMember[] = (data.data || []).map((member: any) => ({
-        id: member.id || member._id || `member-${Date.now()}`,
+      const mappedTeam: SalesTeamMember[] = (data.data || []).map((member: any, index: number) => ({
+        id: member.id || member._id || `member-${Date.now()}-${index}`,
         name: member.name || "",
         email: member.email || "",
         phone: member.phone || "",

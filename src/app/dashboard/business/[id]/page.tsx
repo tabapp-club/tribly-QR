@@ -314,7 +314,7 @@ export default function BusinessDetailPage() {
     if (showPaymentDialog && business && !paymentQRCode) {
       const generatePaymentQR = async () => {
         try {
-          const planPrice = business.paymentPlan === "qr-plus" ? "5999" : "2499";
+          const planPrice = business.paymentPlan === "qr-plus" ? "6999" : "2999";
           const planName = business.paymentPlan === "qr-plus" ? "QR-Plus" : "QR-Basic";
           const sessionId = `payment-${business.id}-${Date.now()}`;
           setPaymentSessionId(sessionId);
@@ -2428,7 +2428,7 @@ export default function BusinessDetailPage() {
                   </div>
                         <CardDescription>Advanced features for growth</CardDescription>
                         <div className="mt-1">
-                          <span className="text-2xl font-bold">₹5,999</span>
+                          <span className="text-2xl font-bold">₹6,999</span>
                           <span className="text-sm text-muted-foreground">/year</span>
                         </div>
                       </div>
@@ -2486,6 +2486,41 @@ export default function BusinessDetailPage() {
                           <p className="text-xs text-muted-foreground">24/7 dedicated customer support</p>
                         </div>
                       </div>
+                      <div className="flex items-start gap-3">
+                        <Star className="h-5 w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="font-medium text-sm">Free AI QR Stand</p>
+                          <p className="text-xs text-muted-foreground">Free AI QR stand to boost your google reviews</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <Star className="h-5 w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="font-medium text-sm">GBP Score Analysis & Insights</p>
+                          <p className="text-xs text-muted-foreground">Track your Google Business Profile performance score</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <Star className="h-5 w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="font-medium text-sm">SEO Keyword Suggestions</p>
+                          <p className="text-xs text-muted-foreground">Location-based keyword recommendations for better rankings</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <Star className="h-5 w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="font-medium text-sm">Review Collection Automation</p>
+                          <p className="text-xs text-muted-foreground">Fully automated review collection workflows</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <Star className="h-5 w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="font-medium text-sm">Direct Review Links</p>
+                          <p className="text-xs text-muted-foreground">Generate direct links to your Google review page</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
                   {business.paymentPlan !== "qr-plus" && (
@@ -2511,7 +2546,7 @@ export default function BusinessDetailPage() {
                         <CardTitle className="text-2xl">QR-Basic</CardTitle>
                         <CardDescription>Essential features for your business</CardDescription>
                         <div className="mt-1">
-                          <span className="text-2xl font-bold">₹2,499</span>
+                          <span className="text-2xl font-bold">₹2,999</span>
                           <span className="text-sm text-muted-foreground">/year</span>
                         </div>
                       </div>
@@ -2553,6 +2588,27 @@ export default function BusinessDetailPage() {
                         <div>
                           <p className="font-medium text-sm">No Repetition</p>
                           <p className="text-xs text-muted-foreground">Smart duplicate detection</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="font-medium text-sm">Free AI QR Stand</p>
+                          <p className="text-xs text-muted-foreground">Free AI QR stand to boost your google reviews</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="font-medium text-sm">GBP Score Analysis & Insights</p>
+                          <p className="text-xs text-muted-foreground">Track your Google Business Profile performance score</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="font-medium text-sm">Direct Review Links</p>
+                          <p className="text-xs text-muted-foreground">Generate direct links to your Google review page</p>
                         </div>
                       </div>
                     </div>
@@ -2796,9 +2852,9 @@ export default function BusinessDetailPage() {
                       </div>
                     ) : (
                       <div className="space-y-2">
-                        {teamUsers.map((user) => (
+                        {teamUsers.map((user, index) => (
                           <div
-                            key={user.id}
+                            key={user.id || user.email || `user-${index}`}
                             className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors"
                           >
                             <div className="flex items-center gap-3">
@@ -2928,7 +2984,7 @@ export default function BusinessDetailPage() {
                   </div>
                   <div className="text-right">
                     <div className="text-2xl font-bold">
-                      ₹{business.paymentPlan === "qr-plus" ? "5,999" : "2,499"}
+                      ₹{business.paymentPlan === "qr-plus" ? "6,999" : "2,999"}
                     </div>
                     <div className="text-xs text-muted-foreground">per year</div>
                   </div>

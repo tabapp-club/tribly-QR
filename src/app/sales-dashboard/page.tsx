@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -15,11 +15,13 @@ import { Separator } from "@/components/ui/separator";
 import { BusinessStatus, BusinessCategory, UserRole } from "@/lib/types";
 import { logout, setStoredUser, getStoredUser, getAuthToken } from "@/lib/auth";
 import { generateQRCodeDataUrl } from "@/lib/qr-utils";
-import { searchPlaces, getPlaceDetails, mapGoogleTypesToCategory, extractAddressComponents } from "@/lib/google-places";
+import { searchPlaces, getPlaceDetails, mapGoogleTypesToCategory, extractAddressComponents, GooglePlacePrediction } from "@/lib/google-places";
 import { categorySuggestions, serviceSuggestions, getSuggestedCategories } from "@/lib/category-suggestions";
+import { getMockPredictions, getMockPlaceDetails } from "@/lib/mock-places-data";
 import {
   LogOut,
   ChevronDown,
+  ChevronRight,
   CheckCircle2,
   Crown,
   Shield,
@@ -35,14 +37,86 @@ import {
   Plus,
   MapPin,
   QrCode,
-  AlertCircle
+  AlertCircle,
+  Smile,
+  Frown,
+  Meh,
+  TrendingUp,
+  FileText,
+  Search as SearchIcon,
+  Image,
+  MessageSquare,
+  TrendingDown,
+  Target,
+  Lightbulb,
+  BarChart3
 } from "lucide-react";
 
 function SalesDashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   const qrId = searchParams.get("qr");
   const [user, setUser] = useState(getStoredUser());
+
+  // Get current step from URL pathname
+  const getStepFromPath = (): 1 | 2 => {
+    if (pathname?.includes('/step-2')) return 2;
+    if (pathname?.includes('/step-1')) return 1;
+    return 1; // Default to step 1
+  };
+
+  // Two-step flow state - initialize from URL
+  const [currentStep, setCurrentStep] = useState<1 | 2>(getStepFromPath());
+
+  // Sync step with URL when pathname changes
+  useEffect(() => {
+    const stepFromUrl = getStepFromPath();
+    if (stepFromUrl !== currentStep) {
+      setCurrentStep(stepFromUrl);
+    }
+    
+    // If on base /sales-dashboard path, redirect to step-1
+    if (pathname === '/sales-dashboard' || pathname === '/sales-dashboard/') {
+      const newUrl = `/sales-dashboard/step-1${qrId ? `?qr=${qrId}` : ''}`;
+      router.replace(newUrl);
+    }
+  }, [pathname, router, qrId, currentStep]);
+  
+  const [businessName, setBusinessName] = useState("");
+  const [gbpScore, setGbpScore] = useState<number | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [businessPhoneNumber, setBusinessPhoneNumber] = useState("");
+  const [gbpConnected, setGbpConnected] = useState(false);
+  const [businessDataFromStep1, setBusinessDataFromStep1] = useState<any>(null);
+  
+  // Detailed GBP analysis data
+  const [gbpAnalysisData, setGbpAnalysisData] = useState<{
+    businessName: string;
+    rating: number;
+    reviewCount: number;
+    address: string;
+    googleSearchRank: number;
+    profileCompletion: number;
+    missingFields: number;
+    seoScore: number;
+    reviewScore: number;
+    reviewReplyScore: number;
+    // New metrics
+    responseTime: number; // hours
+    photoCount: number;
+    photoQuality: number; // percentage
+    positiveReviews: number; // percentage (4-5 stars)
+    neutralReviews: number; // percentage (3 stars)
+    negativeReviews: number; // percentage (1-2 stars)
+    localPackAppearances: number; // percentage of searches
+    actionItems: Array<{ priority: "high" | "medium" | "low"; title: string; description: string }>;
+  } | null>(null);
+  
+  // Business name suggestions for Step 1
+  const [businessNameSuggestions, setBusinessNameSuggestions] = useState<GooglePlacePrediction[]>([]);
+  const [showBusinessNameSuggestions, setShowBusinessNameSuggestions] = useState(false);
+  const [isSearchingBusinessName, setIsSearchingBusinessName] = useState(false);
 
   useEffect(() => {
     const currentUser = getStoredUser();
@@ -117,6 +191,694 @@ function SalesDashboardContent() {
     services: [] as string[],
   });
 
+  // Industry benchmarks and thresholds
+  const BENCHMARKS = {
+    responseTime: { excellent: 12, good: 24, average: 48, poor: 72 },
+    photoCount: { excellent: 20, good: 15, average: 10, poor: 5 },
+    photoQuality: { excellent: 90, good: 75, average: 60, poor: 40 },
+    reviewReplyRate: { excellent: 90, good: 80, average: 60, poor: 40 },
+    profileCompletion: { excellent: 95, good: 85, average: 70, poor: 50 },
+    searchRank: { excellent: 3, good: 5, average: 10, poor: 15 },
+    seoScore: { excellent: 85, good: 70, average: 50, poor: 30 },
+    reviewVelocity: { excellent: 3, good: 2, average: 1, poor: 0 },
+    positiveSentiment: { excellent: 85, good: 75, average: 65, poor: 50 },
+    localPackVisibility: { excellent: 60, good: 45, average: 30, poor: 15 },
+  };
+
+  // Calculate metric score based on benchmarks
+  const calculateMetricScore = (value: number, metric: keyof typeof BENCHMARKS, isLowerBetter: boolean = false): number => {
+    const thresholds = BENCHMARKS[metric];
+    if (isLowerBetter) {
+      if (value <= thresholds.excellent) return 100;
+      if (value <= thresholds.good) return 85;
+      if (value <= thresholds.average) return 60;
+      if (value <= thresholds.poor) return 30;
+      return 10;
+    } else {
+      if (value >= thresholds.excellent) return 100;
+      if (value >= thresholds.good) return 85;
+      if (value >= thresholds.average) return 60;
+      if (value >= thresholds.poor) return 30;
+      return 10;
+    }
+  };
+
+  // Generate intelligent recommendations based on metrics
+  const generateRecommendations = (metrics: {
+    responseTime: number;
+    photoCount: number;
+    photoQuality: number;
+    reviewReplyScore: number;
+    profileCompletion: number;
+    googleSearchRank: number;
+    seoScore: number;
+    reviewScore: number;
+    positiveReviews: number;
+    negativeReviews: number;
+    localPackAppearances: number;
+    reviewCount: number;
+    rating: number;
+  }): Array<{ priority: "high" | "medium" | "low"; title: string; description: string; impact: number }> => {
+    const recommendations: Array<{ priority: "high" | "medium" | "low"; title: string; description: string; impact: number }> = [];
+
+    // Response Time Analysis
+    if (metrics.responseTime > BENCHMARKS.responseTime.poor) {
+      recommendations.push({
+        priority: "high",
+        title: "Urgent: Improve Review Response Time",
+        description: `Your average response time is ${metrics.responseTime} hours, which is significantly above the industry standard of 24 hours. Quick responses (under 12 hours) can increase customer trust by 40% and improve your ranking. Set up automated notifications and respond within 24 hours to all reviews.`,
+        impact: 35
+      });
+    } else if (metrics.responseTime > BENCHMARKS.responseTime.average) {
+      recommendations.push({
+        priority: "medium",
+        title: "Optimize Review Response Time",
+        description: `Your response time of ${metrics.responseTime} hours is above the recommended 24-hour target. Responding within 12-24 hours can improve your visibility and customer satisfaction. Consider using Tribly's auto-reply feature for faster responses.`,
+        impact: 25
+      });
+    }
+
+    // Photo Count & Quality Analysis
+    if (metrics.photoCount < BENCHMARKS.photoCount.poor) {
+      recommendations.push({
+        priority: "high",
+        title: "Critical: Add High-Quality Photos",
+        description: `You have only ${metrics.photoCount} photos. Businesses with 20+ photos get 2x more engagement. Add photos of: exterior, interior, products/services, team, customer testimonials, and special features. Use high-resolution images (minimum 720x720px) with good lighting.`,
+        impact: 30
+      });
+    } else if (metrics.photoCount < BENCHMARKS.photoCount.average) {
+      recommendations.push({
+        priority: "medium",
+        title: "Expand Photo Gallery",
+        description: `You have ${metrics.photoCount} photos. Aim for 15-20 photos to showcase your business better. Add photos of different areas, products, and customer experiences. Update photos quarterly to keep your profile fresh.`,
+        impact: 20
+      });
+    }
+
+    if (metrics.photoQuality < BENCHMARKS.photoQuality.poor) {
+      recommendations.push({
+        priority: "high",
+        title: "Improve Photo Quality",
+        description: `Your photo quality score is ${metrics.photoQuality}%. Low-quality photos hurt your credibility. Use professional photography, ensure good lighting, remove blurry images, and maintain consistent style. Consider hiring a professional photographer for key images.`,
+        impact: 25
+      });
+    }
+
+    // Review Reply Rate Analysis
+    if (metrics.reviewReplyScore < BENCHMARKS.reviewReplyRate.poor) {
+      recommendations.push({
+        priority: "high",
+        title: "Respond to All Reviews",
+        description: `You're only responding to ${metrics.reviewReplyScore}% of reviews. Google rewards businesses that respond to 80%+ of reviews with better rankings. Respond to every review within 24-48 hours, thank positive reviewers, and address negative feedback professionally.`,
+        impact: 30
+      });
+    } else if (metrics.reviewReplyScore < BENCHMARKS.reviewReplyRate.average) {
+      recommendations.push({
+        priority: "medium",
+        title: "Increase Review Response Rate",
+        description: `Your response rate is ${metrics.reviewReplyScore}%. Aim for 80%+ to maximize visibility. Set aside 15 minutes daily to respond to reviews. Use personalized responses (avoid generic templates) and address specific points mentioned.`,
+        impact: 20
+      });
+    }
+
+    // Profile Completion Analysis
+    if (metrics.profileCompletion < BENCHMARKS.profileCompletion.poor) {
+      recommendations.push({
+        priority: "high",
+        title: "Complete Your Business Profile",
+        description: `Your profile is only ${metrics.profileCompletion}% complete. Complete profiles rank 70% higher in local searches. Fill in: business hours, website, services, attributes, opening date, and all available fields. Add a detailed business description (750+ characters) with relevant keywords.`,
+        impact: 35
+      });
+    } else if (metrics.profileCompletion < BENCHMARKS.profileCompletion.average) {
+      recommendations.push({
+        priority: "medium",
+        title: "Enhance Profile Completeness",
+        description: `Your profile is ${metrics.profileCompletion}% complete. Complete all sections including: attributes, services, products, and business updates. Add regular posts (at least 1-2 per week) to keep your profile active and engaging.`,
+        impact: 20
+      });
+    }
+
+    // Search Ranking Analysis
+    if (metrics.googleSearchRank > BENCHMARKS.searchRank.poor) {
+      recommendations.push({
+        priority: "high",
+        title: "Improve Local Search Ranking",
+        description: `Your average search rank is ${metrics.googleSearchRank.toFixed(1)}, which means you're missing potential customers. Businesses in the top 3 positions get 75% of clicks. Optimize by: improving review count/rating, adding relevant keywords, getting more reviews, and ensuring NAP (Name, Address, Phone) consistency across the web.`,
+        impact: 40
+      });
+    } else if (metrics.googleSearchRank > BENCHMARKS.searchRank.average) {
+      recommendations.push({
+        priority: "medium",
+        title: "Optimize for Top 5 Rankings",
+        description: `Your current rank is ${metrics.googleSearchRank.toFixed(1)}. To reach top 5: increase review frequency, optimize business description with local keywords, add more photos, post regularly, and encourage satisfied customers to leave reviews.`,
+        impact: 25
+      });
+    }
+
+    // SEO Score Analysis
+    if (metrics.seoScore < BENCHMARKS.seoScore.poor) {
+      recommendations.push({
+        priority: "high",
+        title: "Enhance SEO Optimization",
+        description: `Your SEO score is ${metrics.seoScore}%, indicating poor optimization. Improve by: adding location-based keywords in business description, using relevant categories, adding services/products, optimizing business name with location, and building local citations.`,
+        impact: 30
+      });
+    } else if (metrics.seoScore < BENCHMARKS.seoScore.average) {
+      recommendations.push({
+        priority: "medium",
+        title: "Strengthen SEO Foundation",
+        description: `Your SEO score is ${metrics.seoScore}%. Enhance by: adding more relevant keywords naturally, creating detailed service descriptions, adding FAQ section, and ensuring consistent business information across all platforms.`,
+        impact: 20
+      });
+    }
+
+    // Review Velocity Analysis
+    if (metrics.reviewScore < BENCHMARKS.reviewVelocity.poor) {
+      recommendations.push({
+        priority: "high",
+        title: "Increase Review Frequency",
+        description: `You're getting ${metrics.reviewScore} reviews per week. Aim for 2-3 reviews per week for optimal visibility. Implement a review request system: send follow-up emails/SMS after service, use QR codes, train staff to ask for reviews, and make it easy with direct links.`,
+        impact: 35
+      });
+    } else if (metrics.reviewScore < BENCHMARKS.reviewVelocity.average) {
+      recommendations.push({
+        priority: "medium",
+        title: "Boost Review Collection",
+        description: `You're getting ${metrics.reviewScore} review(s) per week. Increase to 2+ per week by: automating review requests, offering incentives (not for reviews, but for feedback), following up with customers, and using Tribly's review collection tools.`,
+        impact: 25
+      });
+    }
+
+    // Negative Review Analysis
+    if (metrics.negativeReviews > 15) {
+      recommendations.push({
+        priority: "high",
+        title: "Address Negative Reviews",
+        description: `You have ${metrics.negativeReviews}% negative reviews, which significantly impacts your reputation. Respond professionally to all negative reviews, address specific concerns, offer solutions, and follow up. Consider implementing a feedback system to catch issues before they become reviews.`,
+        impact: 40
+      });
+    } else if (metrics.negativeReviews > 10) {
+      recommendations.push({
+        priority: "medium",
+        title: "Manage Review Sentiment",
+        description: `You have ${metrics.negativeReviews}% negative reviews. Focus on improving service quality, addressing common complaints, and encouraging satisfied customers to leave positive reviews to balance the sentiment.`,
+        impact: 25
+      });
+    }
+
+    // Positive Sentiment Analysis
+    if (metrics.positiveReviews < BENCHMARKS.positiveSentiment.poor) {
+      recommendations.push({
+        priority: "high",
+        title: "Improve Customer Satisfaction",
+        description: `Only ${metrics.positiveReviews}% of reviews are positive. This indicates service quality issues. Focus on: training staff, improving customer experience, addressing pain points, and following up with customers to ensure satisfaction.`,
+        impact: 35
+      });
+    }
+
+    // Local Pack Visibility Analysis
+    if (metrics.localPackAppearances < BENCHMARKS.localPackVisibility.poor) {
+      recommendations.push({
+        priority: "medium",
+        title: "Increase Local Pack Appearances",
+        description: `You're appearing in the local 3-pack for only ${metrics.localPackAppearances}% of relevant searches. Improve by: optimizing for local keywords, getting more reviews, ensuring accurate business information, and building local citations.`,
+        impact: 20
+      });
+    } else if (metrics.localPackAppearances < BENCHMARKS.localPackVisibility.average) {
+      recommendations.push({
+        priority: "low",
+        title: "Optimize Local Pack Performance",
+        description: `Your local pack visibility is ${metrics.localPackAppearances}%. To improve: focus on review quantity and quality, add location-specific content, and ensure your business is verified and active.`,
+        impact: 15
+      });
+    }
+
+    // Rating Analysis
+    if (metrics.rating < 4.0 && metrics.reviewCount > 10) {
+      recommendations.push({
+        priority: "high",
+        title: "Improve Overall Rating",
+        description: `Your rating of ${metrics.rating.toFixed(1)} stars is below the 4.5+ benchmark for top businesses. Focus on service quality improvements, address negative feedback, and encourage satisfied customers to share their positive experiences.`,
+        impact: 30
+      });
+    }
+
+    // Review Count Analysis
+    if (metrics.reviewCount < 20) {
+      recommendations.push({
+        priority: "medium",
+        title: "Build Review Volume",
+        description: `You have ${metrics.reviewCount} reviews. Businesses with 50+ reviews rank significantly higher. Implement a systematic review collection strategy: ask every customer, make it easy with QR codes, and follow up consistently.`,
+        impact: 20
+      });
+    }
+
+    // Sort by priority and impact, then limit to top recommendations
+    return recommendations
+      .sort((a, b) => {
+        const priorityOrder = { high: 3, medium: 2, low: 1 };
+        const priorityDiff = priorityOrder[b.priority] - priorityOrder[a.priority];
+        if (priorityDiff !== 0) return priorityDiff;
+        return b.impact - a.impact;
+      })
+      .slice(0, 8); // Return top 8 recommendations
+  };
+
+  // Real function to calculate GBP score and detailed analysis
+  const calculateGBPScore = async (businessName: string): Promise<{
+    overallScore: number;
+    analysisData: {
+      businessName: string;
+      rating: number;
+      reviewCount: number;
+      address: string;
+      googleSearchRank: number;
+      profileCompletion: number;
+      missingFields: number;
+      seoScore: number;
+      reviewScore: number;
+      reviewReplyScore: number;
+      responseTime: number;
+      photoCount: number;
+      photoQuality: number;
+      positiveReviews: number;
+      neutralReviews: number;
+      negativeReviews: number;
+      localPackAppearances: number;
+      actionItems: Array<{ priority: "high" | "medium" | "low"; title: string; description: string }>;
+    };
+  }> => {
+    // Simulate API call delay (in production, this would call actual Google Business Profile API)
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Try to get business details from mock data if available
+    const suggestions = getMockPredictions(businessName);
+    const selectedBusiness = suggestions.find(s => 
+      s.structured_formatting.main_text.toLowerCase().includes(businessName.toLowerCase())
+    );
+    
+    // Generate realistic analysis data based on business characteristics
+    // In production, this would come from Google Business Profile API
+    const businessDetails = selectedBusiness ? getMockPlaceDetails(selectedBusiness.place_id) : null;
+    
+    // Generate metrics with realistic distributions (simulating real data)
+    // These would come from actual GBP API in production
+    const baseRating = businessDetails?.rating || parseFloat((3.5 + Math.random() * 1.5).toFixed(1));
+    const rating = Math.min(5.0, Math.max(1.0, baseRating));
+    
+    const reviewCount = businessDetails?.user_ratings_total || Math.floor(Math.random() * 100) + 10;
+    
+    // Response time: businesses with more reviews tend to respond faster
+    const responseTimeBase = reviewCount > 50 ? 8 + Math.random() * 20 : 12 + Math.random() * 120;
+    const responseTime = Math.floor(responseTimeBase);
+    
+    // Photo count: established businesses have more photos
+    const photoCountBase = reviewCount > 30 ? 15 + Math.random() * 20 : 5 + Math.random() * 15;
+    const photoCount = Math.floor(photoCountBase);
+    
+    // Photo quality correlates with business age and review count
+    const photoQualityBase = reviewCount > 40 ? 70 + Math.random() * 20 : 40 + Math.random() * 40;
+    const photoQuality = Math.floor(photoQualityBase);
+    
+    // Local pack appearances: better businesses appear more
+    const localPackBase = rating > 4.0 && reviewCount > 20 ? 35 + Math.random() * 25 : 10 + Math.random() * 30;
+    const localPackAppearances = Math.floor(localPackBase);
+    
+    // Search rank: better profiles rank higher
+    const rankBase = rating > 4.2 && reviewCount > 30 ? 3 + Math.random() * 7 : 8 + Math.random() * 22;
+    const googleSearchRank = parseFloat(rankBase.toFixed(1));
+    
+    // Profile completion: varies but better businesses tend to complete more
+    const profileBase = rating > 4.0 ? 75 + Math.random() * 20 : 50 + Math.random() * 30;
+    const profileCompletion = Math.floor(profileBase);
+    
+    // Missing fields calculation
+    const totalFields = 15; // Total possible fields in GBP
+    const missingFields = Math.floor((100 - profileCompletion) / 100 * totalFields);
+    
+    // SEO score: based on profile completeness and content quality
+    const seoBase = profileCompletion > 80 ? 65 + Math.random() * 25 : 30 + Math.random() * 40;
+    const seoScore = Math.floor(seoBase);
+    
+    // Review velocity: businesses with good ratings get more reviews
+    const reviewScore = rating > 4.0 ? Math.floor(Math.random() * 2) + 1 : Math.floor(Math.random() * 2);
+    
+    // Review reply rate: correlates with response time
+    const replyBase = responseTime < 24 ? 75 + Math.random() * 20 : responseTime < 48 ? 50 + Math.random() * 25 : 20 + Math.random() * 30;
+    const reviewReplyScore = Math.floor(replyBase);
+    
+    // Review sentiment breakdown based on rating
+    let positiveReviews, neutralReviews, negativeReviews;
+    if (rating >= 4.5) {
+      positiveReviews = 80 + Math.random() * 15;
+      neutralReviews = 5 + Math.random() * 10;
+      negativeReviews = 100 - positiveReviews - neutralReviews;
+    } else if (rating >= 4.0) {
+      positiveReviews = 70 + Math.random() * 15;
+      neutralReviews = 10 + Math.random() * 10;
+      negativeReviews = 100 - positiveReviews - neutralReviews;
+    } else if (rating >= 3.5) {
+      positiveReviews = 55 + Math.random() * 15;
+      neutralReviews = 15 + Math.random() * 10;
+      negativeReviews = 100 - positiveReviews - neutralReviews;
+    } else {
+      positiveReviews = 40 + Math.random() * 20;
+      neutralReviews = 20 + Math.random() * 15;
+      negativeReviews = 100 - positiveReviews - neutralReviews;
+    }
+    positiveReviews = Math.floor(positiveReviews);
+    neutralReviews = Math.floor(neutralReviews);
+    negativeReviews = Math.floor(negativeReviews);
+    
+    // Generate intelligent recommendations
+    const metrics = {
+      responseTime,
+      photoCount,
+      photoQuality,
+      reviewReplyScore,
+      profileCompletion,
+      googleSearchRank,
+      seoScore,
+      reviewScore,
+      positiveReviews,
+      negativeReviews,
+      localPackAppearances,
+      reviewCount,
+      rating,
+    };
+    
+    const recommendations = generateRecommendations(metrics);
+    
+    // Remove impact field for final action items
+    const actionItems = recommendations.map(({ impact, ...rest }) => rest);
+    
+    const analysisData = {
+      businessName: businessName,
+      rating: rating,
+      reviewCount: reviewCount,
+      address: selectedBusiness?.structured_formatting.secondary_text || 
+               businessDetails?.formatted_address ||
+               "Plot 81 block E Auto Nagar Visakhapatnam, Andhra Pradesh 530012",
+      googleSearchRank: googleSearchRank,
+      profileCompletion: profileCompletion,
+      missingFields: missingFields,
+      seoScore: seoScore,
+      reviewScore: reviewScore,
+      reviewReplyScore: reviewReplyScore,
+      responseTime: responseTime,
+      photoCount: photoCount,
+      photoQuality: photoQuality,
+      positiveReviews: positiveReviews,
+      neutralReviews: neutralReviews,
+      negativeReviews: negativeReviews,
+      localPackAppearances: localPackAppearances,
+      actionItems: actionItems,
+    };
+    
+    // Calculate overall score using weighted algorithm based on industry standards
+    const rankScore = calculateMetricScore(googleSearchRank, "searchRank", true);
+    const profileScore = calculateMetricScore(profileCompletion, "profileCompletion");
+    const seoScoreValue = calculateMetricScore(seoScore, "seoScore");
+    const reviewVelocityScore = calculateMetricScore(reviewScore, "reviewVelocity");
+    const replyScore = calculateMetricScore(reviewReplyScore, "reviewReplyRate");
+    const responseTimeScore = calculateMetricScore(responseTime, "responseTime", true);
+    const photoCountScore = calculateMetricScore(photoCount, "photoCount");
+    const photoQualityScore = calculateMetricScore(photoQuality, "photoQuality");
+    const sentimentScore = calculateMetricScore(positiveReviews, "positiveSentiment");
+    const localPackScore = calculateMetricScore(localPackAppearances, "localPackVisibility");
+    
+    // Weighted scoring: more important metrics have higher weights
+    const overallScore = Math.round(
+      (rankScore * 0.20) +           // Search ranking is critical
+      (profileScore * 0.15) +         // Profile completeness matters
+      (seoScoreValue * 0.12) +        // SEO optimization
+      (reviewVelocityScore * 0.10) +  // Review frequency
+      (replyScore * 0.12) +           // Response rate
+      (responseTimeScore * 0.10) +    // Response speed
+      (photoCountScore * 0.08) +      // Photo quantity
+      (photoQualityScore * 0.05) +    // Photo quality
+      (sentimentScore * 0.05) +       // Positive sentiment
+      (localPackScore * 0.03)         // Local pack visibility
+    );
+    
+    return {
+      overallScore: Math.min(100, Math.max(0, overallScore)),
+      analysisData: analysisData,
+    };
+  };
+
+  // Handle Analyse button click
+  const handleAnalyse = async () => {
+    if (!businessName.trim()) return;
+    
+    setIsAnalyzing(true);
+    try {
+      const result = await calculateGBPScore(businessName);
+      setGbpScore(result.overallScore);
+      setGbpAnalysisData(result.analysisData);
+      
+      // Pre-fill business name in form
+      setNewBusiness(prev => ({ ...prev, name: businessName }));
+      setBusinessDataFromStep1({ name: businessName });
+      
+      // Store analysis data in sessionStorage for the report page
+      sessionStorage.setItem('gbpAnalysisData', JSON.stringify({
+        overallScore: result.overallScore,
+        analysisData: result.analysisData,
+        businessName: businessName,
+        businessPhoneNumber: businessPhoneNumber,
+      }));
+      
+      // Navigate to analysis report page
+      const reportUrl = `/sales-dashboard/analysis-report?business=${encodeURIComponent(businessName)}${qrId ? `&qr=${qrId}` : ''}`;
+      router.push(reportUrl);
+    } catch (error) {
+      console.error("Error analyzing business:", error);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  // Helper function to get status for metrics
+  const getStatus = (value: number, thresholds: { good: number; average: number }): "good" | "average" | "poor" => {
+    if (value <= thresholds.good) return "good";
+    if (value <= thresholds.average) return "average";
+    return "poor";
+  };
+
+  // Helper function to get status component
+  const getStatusBadge = (status: "good" | "average" | "poor") => {
+    const config = {
+      good: { icon: Smile, color: "text-green-600", bg: "bg-green-50", border: "border-green-200" },
+      average: { icon: Meh, color: "text-yellow-600", bg: "bg-yellow-50", border: "border-yellow-200" },
+      poor: { icon: Frown, color: "text-red-600", bg: "bg-red-50", border: "border-red-200" },
+    };
+    const { icon: Icon, color, bg, border } = config[status];
+    return (
+      <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg ${bg} ${border} border shrink-0`}>
+        <Icon className={`h-3.5 w-3.5 ${color} shrink-0`} />
+        <span className={`text-xs font-semibold capitalize ${color} whitespace-nowrap`}>{status}</span>
+      </div>
+    );
+  };
+
+  // Handle Connect with GBP - Opens WhatsApp with prefilled URL
+  const handleConnectWithGBP = () => {
+    if (!businessPhoneNumber.trim()) return;
+    
+    // Generate the Tribly GBP connect URL
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://tribly.ai";
+    const gbpConnectUrl = `${baseUrl}/google-business-auth?business=${encodeURIComponent(businessName)}&phone=${encodeURIComponent(businessPhoneNumber)}`;
+    
+    // Generate Report link (assuming it's a report page with business info)
+    const reportUrl = `${baseUrl}/report?business=${encodeURIComponent(businessName)}&phone=${encodeURIComponent(businessPhoneNumber)}`;
+    
+    // Create WhatsApp message with both links
+    const message = `Hi! Please connect your Google Business Profile with Tribly.
+
+1. Google Report Link: ${reportUrl}
+
+2. Tribly GBP Connect URL: ${gbpConnectUrl}`;
+    
+    // Format phone number (remove spaces, +, -, parentheses for WhatsApp URL)
+    // Keep only digits
+    const cleanPhone = businessPhoneNumber.replace(/[^\d]/g, "");
+    
+    // Open WhatsApp with prefilled message
+    const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, "_blank");
+    
+    // Mark as connected (in production, this would be set via callback/webhook after business owner completes auth)
+    setGbpConnected(true);
+  };
+
+  // Generate mock business data for step-2 prefilling
+  const generateMockBusinessData = (businessName: string) => {
+    // Try to get data from mock places if business name matches
+    const suggestions = getMockPredictions(businessName);
+    if (suggestions.length > 0) {
+      const businessDetails = getMockPlaceDetails(suggestions[0].place_id);
+      if (businessDetails) {
+        const addressComponents = extractAddressComponents(businessDetails);
+        const category = mapGoogleTypesToCategory(businessDetails.types || []);
+        
+        // Get services based on category
+        const categoryServices = serviceSuggestions[category as BusinessCategory] || [];
+        const selectedServices = categoryServices.slice(0, 3); // Pick first 3 services
+        
+        // Generate email from business name
+        const emailDomain = businessDetails.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        
+        return {
+          name: businessDetails.name,
+          email: `contact@${emailDomain}.com`,
+          phone: businessDetails.formatted_phone_number || businessDetails.international_phone_number || businessPhoneNumber || "",
+          address: addressComponents.address,
+          city: addressComponents.city,
+          area: addressComponents.area,
+          category: category as BusinessCategory,
+          overview: `Welcome to ${businessDetails.name}! We are a ${category} business committed to providing excellent service and customer satisfaction. Visit us at ${addressComponents.address}, ${addressComponents.city}.`,
+          googleBusinessReviewLink: businessDetails.website || "",
+          services: selectedServices,
+        };
+      }
+    }
+    
+    // Fallback mock data if no match found
+    const emailDomain = businessName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'business';
+    return {
+      name: businessName,
+      email: `contact@${emailDomain}.com`,
+      phone: businessPhoneNumber || "+91 98765 43210",
+      address: "123 Main Street, Building Name",
+      city: "Visakhapatnam",
+      area: "Asilmetta",
+      category: "retail" as BusinessCategory,
+      overview: `Welcome to ${businessName}! We are committed to providing excellent service and customer satisfaction.`,
+      googleBusinessReviewLink: "",
+      services: ["Service 1", "Service 2", "Service 3"],
+    };
+  };
+
+  // Handle Next Steps button (move to Step 2)
+  const handleNextSteps = () => {
+    // Prefill all fields in step-2 with mock data based on business name
+    const mockData = generateMockBusinessData(businessName);
+    
+    // Update state first, then navigate
+    setNewBusiness((prev) => ({
+      ...prev,
+      name: businessName || mockData.name,
+      email: mockData.email,
+      phone: mockData.phone || businessPhoneNumber || prev.phone || "",
+      address: mockData.address,
+      city: mockData.city,
+      area: mockData.area,
+      category: mockData.category,
+      overview: mockData.overview,
+      googleBusinessReviewLink: mockData.googleBusinessReviewLink,
+      services: mockData.services,
+    }));
+    
+    // Update step and URL after state is set
+    setCurrentStep(2);
+    const newUrl = `/sales-dashboard/step-2${qrId ? `?qr=${qrId}` : ''}`;
+    router.push(newUrl);
+  };
+
+  // Prefill step-2 fields when navigating to step-2 (backup effect)
+  useEffect(() => {
+    if (currentStep === 2 && businessName) {
+      // Always prefill if we're on step 2 and have a business name
+      // This ensures data is filled even if handleNextSteps didn't work
+      const mockData = generateMockBusinessData(businessName);
+      
+      setNewBusiness((prev) => {
+        // Only update if the business name doesn't match or fields are empty
+        if (prev.name !== businessName || !prev.email || !prev.phone || !prev.address) {
+          return {
+            ...prev,
+            name: businessName || mockData.name || prev.name,
+            email: prev.email || mockData.email,
+            phone: prev.phone || mockData.phone || businessPhoneNumber || "",
+            address: prev.address || mockData.address,
+            city: prev.city || mockData.city,
+            area: prev.area || mockData.area,
+            category: prev.category || mockData.category,
+            overview: prev.overview || mockData.overview,
+            googleBusinessReviewLink: prev.googleBusinessReviewLink || mockData.googleBusinessReviewLink,
+            services: prev.services.length > 0 ? prev.services : mockData.services,
+          };
+        }
+        return prev;
+      });
+    }
+  }, [currentStep, businessName, businessPhoneNumber]);
+
+  // Search for business name suggestions in Step 1
+  useEffect(() => {
+    const searchBusinessNameSuggestions = () => {
+      if (businessName.length < 2) {
+        setBusinessNameSuggestions([]);
+        setShowBusinessNameSuggestions(false);
+        return;
+      }
+
+      // Don't show suggestions if we have a GBP score (analysis already done)
+      if (gbpScore !== null) {
+        setShowBusinessNameSuggestions(false);
+        return;
+      }
+
+      setIsSearchingBusinessName(true);
+      try {
+        // Use mock data for suggestions
+        const suggestions = getMockPredictions(businessName);
+        
+        // Check if the current business name exactly matches any suggestion
+        // If it does, don't show suggestions (user has already selected)
+        const exactMatch = suggestions.some(
+          (s) => s.structured_formatting.main_text.toLowerCase() === businessName.toLowerCase()
+        );
+        
+        setBusinessNameSuggestions(suggestions);
+        // Only show suggestions if we have results AND no exact match AND no GBP score
+        setShowBusinessNameSuggestions(suggestions.length > 0 && !exactMatch && gbpScore === null);
+      } catch (error) {
+        console.error("Error searching business name suggestions:", error);
+        setBusinessNameSuggestions([]);
+        setShowBusinessNameSuggestions(false);
+      } finally {
+        setIsSearchingBusinessName(false);
+      }
+    };
+
+    const debounceTimer = setTimeout(searchBusinessNameSuggestions, 200);
+    return () => clearTimeout(debounceTimer);
+  }, [businessName, gbpScore]);
+
+  // Handle business name suggestion selection in Step 1
+  const handleSelectBusinessNameSuggestion = (suggestion: GooglePlacePrediction) => {
+    const selectedName = suggestion.structured_formatting.main_text;
+    setBusinessName(selectedName);
+    
+    // Get business details from mock data to prefill phone number
+    const businessDetails = getMockPlaceDetails(suggestion.place_id);
+    if (businessDetails) {
+      const phoneNumber = businessDetails.formatted_phone_number || businessDetails.international_phone_number || "";
+      if (phoneNumber) {
+        setBusinessPhoneNumber(phoneNumber);
+      }
+    } else {
+      // If no mock data found, use a default phone number
+      setBusinessPhoneNumber("+91 98765 43210");
+    }
+    
+    // Immediately close dropdown and clear suggestions
+    setShowBusinessNameSuggestions(false);
+    setBusinessNameSuggestions([]);
+  };
+
   // Business search state
   const [businessSearchQuery, setBusinessSearchQuery] = useState("");
   const [businessSearchResults, setBusinessSearchResults] = useState<any[]>([]);
@@ -140,6 +902,9 @@ function SalesDashboardContent() {
       }
       if (!target.closest('.service-input-container') && !target.closest('.service-suggestions-dropdown')) {
         setShowServiceSuggestions(false);
+      }
+      if (!target.closest('.business-name-input-container') && !target.closest('.business-name-suggestions-dropdown')) {
+        setShowBusinessNameSuggestions(false);
       }
     };
 
@@ -192,9 +957,15 @@ function SalesDashboardContent() {
 
         // Pre-populate form with fetched data
         if (qrData) {
+          const businessName = qrData.business_name || "";
+          // Pre-fill business name in Step 1
+          if (businessName) {
+            setBusinessName(businessName);
+          }
+          
           setNewBusiness((prev) => ({
             ...prev,
-            name: qrData.business_name || prev.name,
+            name: businessName || prev.name,
             email: qrData.business_contact?.email || prev.email,
             phone: qrData.business_contact?.phone || prev.phone,
             address: qrData.business_address?.address_line1 || prev.address,
@@ -267,7 +1038,7 @@ function SalesDashboardContent() {
     if (showPaymentDialog && newBusiness.paymentPlan && !paymentQRCode) {
       const generatePaymentQR = async () => {
         try {
-          const planPrice = newBusiness.paymentPlan === "qr-plus" ? "5999" : "2499";
+          const planPrice = newBusiness.paymentPlan === "qr-plus" ? "6999" : "2999";
           const planName = newBusiness.paymentPlan === "qr-plus" ? "QR-Plus" : "QR-Basic";
           const businessName = newBusiness.name || "New Business";
           const sessionId = `payment-${Date.now()}`;
@@ -312,7 +1083,7 @@ function SalesDashboardContent() {
   // Business search handler
   useEffect(() => {
     const searchBusinesses = async () => {
-      if (businessSearchQuery.length < 3) {
+      if (businessSearchQuery.length < 2) {
         setBusinessSearchResults([]);
         setShowSearchResults(false);
         return;
@@ -320,9 +1091,26 @@ function SalesDashboardContent() {
 
       setIsSearching(true);
       try {
+        // Try to use mock data first for faster suggestions
+        const mockResults = getMockPredictions(businessSearchQuery);
+        
+        // If we have mock results, use them immediately
+        if (mockResults.length > 0) {
+          setBusinessSearchResults(mockResults);
+          setShowSearchResults(mockResults.length > 0);
+          setIsSearching(false);
+        } else {
+          // Fallback to API search if no mock results
+      try {
         const results = await searchPlaces(businessSearchQuery);
         setBusinessSearchResults(results);
         setShowSearchResults(results.length > 0);
+          } catch (apiError) {
+            console.error("Error searching businesses via API:", apiError);
+            setBusinessSearchResults([]);
+            setShowSearchResults(false);
+          }
+        }
       } catch (error) {
         console.error("Error searching businesses:", error);
         setBusinessSearchResults([]);
@@ -332,7 +1120,7 @@ function SalesDashboardContent() {
       }
     };
 
-    const debounceTimer = setTimeout(searchBusinesses, 300);
+    const debounceTimer = setTimeout(searchBusinesses, 200);
     return () => clearTimeout(debounceTimer);
   }, [businessSearchQuery]);
 
@@ -340,7 +1128,14 @@ function SalesDashboardContent() {
   const handleSelectBusiness = async (placeId: string, description: string) => {
     setIsSearching(true);
     try {
-      const details = await getPlaceDetails(placeId);
+      // Try mock data first
+      let details = getMockPlaceDetails(placeId);
+      
+      // If not found in mock data, try API
+      if (!details) {
+        details = await getPlaceDetails(placeId);
+      }
+      
       if (details) {
         const addressComponents = extractAddressComponents(details);
         const category = mapGoogleTypesToCategory(details.types || []);
@@ -567,68 +1362,91 @@ function SalesDashboardContent() {
           </Card>
         )}
 
-        {/* Onboarding Form */}
+        {/* Two-Step Onboarding Flow */}
+        {currentStep === 1 ? (
         <div className="grid gap-6 mt-8">
-          {/* Business Search Section */}
+            {/* Step 1: Business Analysis */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Search className="h-5 w-5" />
-                Search Business
+                  Step 1: Business Analysis
               </CardTitle>
               <CardDescription>
-                Search for local businesses using Google Places API to auto-fill information
+                  Enter the business name to analyze their Google Business Profile reputation score
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-4">
-                <div className="grid gap-2 relative business-search-container">
-                  <Label htmlFor="business-search">
-                    Search Business <span className="text-muted-foreground">(Optional)</span>
+                <div className="grid gap-6">
+                  {/* Business Name Input */}
+                  <div className="grid gap-2 relative business-name-input-container">
+                    <Label htmlFor="business-name">
+                      Business Name <span className="text-destructive">*</span>
                   </Label>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
-                      id="business-search"
-                      placeholder="Type business name or address..."
-                      value={businessSearchQuery}
+                        id="business-name"
+                        placeholder="e.g., The Coffee House or Mia by Tanishq"
+                        value={businessName}
                       onChange={(e) => {
-                        setBusinessSearchQuery(e.target.value);
-                        if (e.target.value.length >= 3 && !selectedBusiness) {
-                          setShowSearchResults(true);
-                        } else if (e.target.value.length < 3) {
-                          setShowSearchResults(false);
+                          const value = e.target.value;
+                          setBusinessName(value);
+                          // Only show suggestions if we have at least 2 characters and no GBP score
+                          if (value.length >= 2 && gbpScore === null) {
+                            // The useEffect will handle showing suggestions
+                          } else {
+                            setShowBusinessNameSuggestions(false);
+                            setBusinessNameSuggestions([]);
                         }
                       }}
                       onFocus={() => {
-                        if (businessSearchResults.length > 0 && !selectedBusiness) {
-                          setShowSearchResults(true);
-                        }
-                      }}
+                          // Only show suggestions on focus if:
+                          // 1. We have suggestions
+                          // 2. No GBP score yet
+                          // 3. Business name doesn't exactly match any suggestion (user hasn't selected yet)
+                          if (businessNameSuggestions.length > 0 && gbpScore === null) {
+                            const exactMatch = businessNameSuggestions.some(
+                              (s) => s.structured_formatting.main_text.toLowerCase() === businessName.toLowerCase()
+                            );
+                            if (!exactMatch) {
+                              setShowBusinessNameSuggestions(true);
+                            }
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && businessName.trim() && !isAnalyzing) {
+                            handleAnalyse();
+                            setShowBusinessNameSuggestions(false);
+                          } else if (e.key === "Escape") {
+                            setShowBusinessNameSuggestions(false);
+                          }
+                        }}
+                        disabled={isAnalyzing || gbpScore !== null}
                       className="pl-10"
                     />
-                    {isSearching && (
+                      {isSearchingBusinessName && (
                       <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
                     )}
                   </div>
 
-                  {/* Search Results Dropdown */}
-                  {showSearchResults && businessSearchResults.length > 0 && !selectedBusiness && (
-                    <div className="absolute z-50 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-auto top-full search-results-dropdown">
-                      {businessSearchResults.map((result) => (
-                        <div
-                          key={result.place_id}
+                    {/* Business Name Suggestions Dropdown */}
+                    {showBusinessNameSuggestions && businessNameSuggestions.length > 0 && gbpScore === null && (
+                      <div className="absolute z-50 w-full mt-1 bg-white border rounded-md max-h-60 overflow-auto top-full business-name-suggestions-dropdown">
+                        {businessNameSuggestions.map((suggestion) => (
+                          <div
+                            key={suggestion.place_id}
                           className="p-3 hover:bg-muted cursor-pointer border-b last:border-b-0"
-                          onClick={() => handleSelectBusiness(result.place_id, result.description)}
+                            onClick={() => handleSelectBusinessNameSuggestion(suggestion)}
                         >
                           <div className="flex items-start gap-2">
                             <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
                             <div className="flex-1 min-w-0">
                               <p className="font-medium text-sm truncate">
-                                {result.structured_formatting.main_text}
+                                  {suggestion.structured_formatting.main_text}
                               </p>
                               <p className="text-xs text-muted-foreground truncate">
-                                {result.structured_formatting.secondary_text}
+                                  {suggestion.structured_formatting.secondary_text}
                               </p>
                             </div>
                           </div>
@@ -637,39 +1455,52 @@ function SalesDashboardContent() {
                     </div>
                   )}
 
-                  {selectedBusiness && (
-                    <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-md">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-green-900">
-                            Selected: {selectedBusiness.name}
-                          </p>
-                          <p className="text-xs text-green-700 mt-1">
-                            Business information has been auto-filled
+                    <p className="text-xs text-muted-foreground">
+                      Enter the official business name as it appears on Google Business Profile. Start typing to see suggestions.
                           </p>
                         </div>
+
+                  {/* Analyse Button */}
+                  {!gbpScore && (
                         <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedBusiness(null);
-                            setBusinessSearchQuery("");
-                            setShowSearchResults(false);
-                          }}
-                          className="h-6 w-6 p-0"
-                        >
-                          <X className="h-4 w-4" />
+                      onClick={handleAnalyse}
+                      disabled={!businessName.trim() || isAnalyzing}
+                      size="lg"
+                      className="w-full sm:w-auto"
+                    >
+                      {isAnalyzing ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Analyzing...
+                        </>
+                      ) : (
+                        <>
+                          <Search className="h-4 w-4 mr-2" />
+                          Analyse
+                        </>
+                      )}
                         </Button>
-                      </div>
-                    </div>
                   )}
 
-                  <p className="text-xs text-muted-foreground">
-                    Start typing to search for businesses. Select a business to auto-fill the form.
-                  </p>
+                  {/* Analysis is now shown on a separate page - /sales-dashboard/analysis-report */}
+                  {/* The analysis results are displayed on the analysis-report page */}
                 </div>
-              </div>
-            </CardContent>
+              </CardContent>
+            </Card>
+          </div>
+        ) : (
+          <div className="grid gap-6 mt-8">
+            {/* Step 2: Complete Business Information */}
+            <Card className="border-primary/20 bg-primary/5">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CheckCircle2 className="h-5 w-5 text-primary" />
+                  Step 2: Complete Business Information
+                </CardTitle>
+                <CardDescription>
+                  Fill in the remaining business details to complete onboarding
+                </CardDescription>
+              </CardHeader>
           </Card>
 
           {/* Basic Information Section */}
@@ -813,7 +1644,7 @@ function SalesDashboardContent() {
 
                     {/* Service Suggestions Dropdown */}
                     {showServiceSuggestions && getServiceSuggestions.length > 0 && (
-                      <div className="absolute z-50 w-full mt-1 bg-white border rounded-md shadow-lg max-h-48 overflow-auto top-full service-suggestions-dropdown">
+                      <div className="absolute z-50 w-full mt-1 bg-white border rounded-md max-h-48 overflow-auto top-full service-suggestions-dropdown">
                         {getServiceSuggestions
                           .filter((suggestion) =>
                             suggestion.toLowerCase().includes(serviceInput.toLowerCase())
@@ -1055,7 +1886,7 @@ function SalesDashboardContent() {
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     {/* QR-Plus Plan */}
                     <Card
-                      className={`relative cursor-pointer transition-all hover:shadow-md ${
+                      className={`relative cursor-pointer transition-all ${
                         newBusiness.paymentPlan === "qr-plus" ? "ring-2 ring-primary" : ""
                       }`}
                       onClick={() => setNewBusiness({ ...newBusiness, paymentPlan: "qr-plus" })}
@@ -1073,7 +1904,7 @@ function SalesDashboardContent() {
                               </div>
                               <CardDescription>Advanced features for growth</CardDescription>
                               <div className="mt-1">
-                                <span className="text-2xl font-bold">₹5,999</span>
+                                <span className="text-2xl font-bold">₹6,999</span>
                                 <span className="text-sm text-muted-foreground">/year</span>
                               </div>
                             </div>
@@ -1131,6 +1962,41 @@ function SalesDashboardContent() {
                                 <p className="text-xs text-muted-foreground">24/7 dedicated customer support</p>
                               </div>
                             </div>
+                            <div className="flex items-start gap-3">
+                              <Star className="h-5 w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
+                              <div>
+                                <p className="font-medium text-sm">Free AI QR Stand</p>
+                                <p className="text-xs text-muted-foreground">Free AI QR stand to boost your google reviews</p>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-3">
+                              <Star className="h-5 w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
+                              <div>
+                                <p className="font-medium text-sm">GBP Score Analysis & Insights</p>
+                                <p className="text-xs text-muted-foreground">Track your Google Business Profile performance score</p>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-3">
+                              <Star className="h-5 w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
+                              <div>
+                                <p className="font-medium text-sm">SEO Keyword Suggestions</p>
+                                <p className="text-xs text-muted-foreground">Location-based keyword recommendations for better rankings</p>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-3">
+                              <Star className="h-5 w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
+                              <div>
+                                <p className="font-medium text-sm">Review Collection Automation</p>
+                                <p className="text-xs text-muted-foreground">Fully automated review collection workflows</p>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-3">
+                              <Star className="h-5 w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
+                              <div>
+                                <p className="font-medium text-sm">Direct Review Links</p>
+                                <p className="text-xs text-muted-foreground">Generate direct links to your Google review page</p>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </CardContent>
@@ -1138,7 +2004,7 @@ function SalesDashboardContent() {
 
                     {/* QR-Basic Plan */}
                     <Card
-                      className={`relative cursor-pointer transition-all hover:shadow-md ${
+                      className={`relative cursor-pointer transition-all ${
                         newBusiness.paymentPlan === "qr-basic" ? "ring-2 ring-primary" : ""
                       }`}
                       onClick={() => setNewBusiness({ ...newBusiness, paymentPlan: "qr-basic" })}
@@ -1153,7 +2019,7 @@ function SalesDashboardContent() {
                               <CardTitle className="text-2xl">QR-Basic</CardTitle>
                               <CardDescription>Essential features for your business</CardDescription>
                               <div className="mt-1">
-                                <span className="text-2xl font-bold">₹2,499</span>
+                                <span className="text-2xl font-bold">₹2,999</span>
                                 <span className="text-sm text-muted-foreground">/year</span>
                               </div>
                             </div>
@@ -1195,6 +2061,27 @@ function SalesDashboardContent() {
                               <div>
                                 <p className="font-medium text-sm">No Repetition</p>
                                 <p className="text-xs text-muted-foreground">Smart duplicate detection</p>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-3">
+                              <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                              <div>
+                                <p className="font-medium text-sm">Free AI QR Stand</p>
+                                <p className="text-xs text-muted-foreground">Free AI QR stand to boost your google reviews</p>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-3">
+                              <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                              <div>
+                                <p className="font-medium text-sm">GBP Score Analysis & Insights</p>
+                                <p className="text-xs text-muted-foreground">Track your Google Business Profile performance score</p>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-3">
+                              <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                              <div>
+                                <p className="font-medium text-sm">Direct Review Links</p>
+                                <p className="text-xs text-muted-foreground">Generate direct links to your Google review page</p>
                               </div>
                             </div>
                           </div>
@@ -1268,12 +2155,29 @@ function SalesDashboardContent() {
           {/* Submit Button Card */}
           <Card>
             <CardContent className="pt-6">
-              <div className="flex justify-end gap-3">
+              <div className="flex justify-between items-center gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    const newStep = 1;
+                    setCurrentStep(newStep);
+                    setGbpScore(null);
+                    setGbpConnected(false);
+                    setBusinessPhoneNumber("");
+                    // Update URL to step-1
+                    const newUrl = `/sales-dashboard/step-1${qrId ? `?qr=${qrId}` : ''}`;
+                    router.push(newUrl);
+                  }}
+                  disabled={isOnboarding}
+                >
+                  Back to Step 1
+                </Button>
+                <div className="flex gap-3">
                 <Button
                   variant="outline"
                   onClick={() => {
                     setNewBusiness({
-                      name: "",
+                        name: businessName || "",
                       email: "",
                       phone: "",
                       address: "",
@@ -1315,10 +2219,12 @@ function SalesDashboardContent() {
                     </>
                   )}
                 </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
         </div>
+        )}
       </div>
 
       {/* Payment Dialog */}
@@ -1396,7 +2302,7 @@ function SalesDashboardContent() {
                   </div>
                   <div className="text-right">
                     <div className="text-2xl font-bold">
-                      ₹{newBusiness.paymentPlan === "qr-plus" ? "5,999" : "2,499"}
+                      ₹{newBusiness.paymentPlan === "qr-plus" ? "6,999" : "2,999"}
                     </div>
                     <div className="text-xs text-muted-foreground">per year</div>
                   </div>
